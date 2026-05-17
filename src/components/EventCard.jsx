@@ -3,17 +3,18 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, MapPin, Users, Ticket, Maximize2, X } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000';
+// CORRECTION : Utilisation de la variable d'environnement ou repli vers ton API Render en production
+const API_URL = import.meta.env.VITE_API_URL || 'https://ton-api-backend.onrender.com';
 
 export default function EventCard({ event, index = 0 }) {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const date = new Date(event.date);
+  const date = new Date(event?.date);
 
-  const availPct = event.total_tickets > 0
+  const availPct = event?.total_tickets > 0
     ? Math.round((event.available_tickets / event.total_tickets) * 100)
     : 0;
 
-  const minPrice = event.categories
+  const minPrice = event?.categories
     ?.filter(c => c && c.id)
     .reduce((min, c) => {
       const p = parseFloat(c.price);
@@ -21,7 +22,11 @@ export default function EventCard({ event, index = 0 }) {
     }, Infinity);
 
   const hasFree = minPrice === 0;
-  const fullImageUrl = `${API_URL}${event.banner_url}`;
+  
+  // Construit l'URL complète de l'image de manière sécurisée
+  const fullImageUrl = event?.banner_url?.startsWith('http') 
+    ? event.banner_url 
+    : `${API_URL}${event?.banner_url || ''}`;
 
   // Ouvre l'image en plein écran sans déclencher le lien de la carte
   const openLightbox = (e) => {
@@ -29,6 +34,8 @@ export default function EventCard({ event, index = 0 }) {
     e.stopPropagation();
     setIsLightboxOpen(true);
   };
+
+  if (!event) return null;
 
   return (
     <>
@@ -48,7 +55,11 @@ export default function EventCard({ event, index = 0 }) {
                   src={fullImageUrl}
                   alt={event.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => { e.target.style.display = 'none'; }}
+                  onError={(e) => { 
+                    // Si l'image échoue, on affiche le bloc de texte de remplacement
+                    e.target.style.display = 'none';
+                    e.target.nextSibling?.classList.remove('hidden');
+                  }}
                 />
                 {/* Bouton pour agrandir l'affiche */}
                 <button
@@ -63,16 +74,24 @@ export default function EventCard({ event, index = 0 }) {
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <span className="font-display text-6xl tracking-widest text-muted opacity-20">
-                  {event.title.slice(0, 2).toUpperCase()}
+                  {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
                 </span>
               </div>
             )}
+            
+            {/* Fallback au cas où l'image dynamique plante au chargement */}
+            <div className="hidden absolute inset-0 flex items-center justify-center bg-slate-900">
+              <span className="font-display text-6xl tracking-widest text-muted opacity-20">
+                {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
+              </span>
+            </div>
+
             {/* Dégradé d'ombrage pour le bas de la bannière d'image */}
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(5,12,24,0.4) 0%, transparent 60%)' }} />
 
             {/* Date badge */}
             <div className="absolute top-3 left-3 bg-brand-500 text-white text-xs font-bold px-2 py-1 rounded-lg tracking-wide">
-              {date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase()}
+              {!isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase() : 'ND'}
             </div>
 
             {/* Organizer */}
@@ -104,7 +123,12 @@ export default function EventCard({ event, index = 0 }) {
             <div className="flex flex-col gap-1.5 mb-3">
               <div className="flex items-center gap-2 text-secondary text-xs">
                 <Calendar size={11} className="flex-shrink-0" />
-                <span>{date.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                <span>
+                  {!isNaN(date.getTime()) 
+                    ? date.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                    : 'Date non définie'
+                  }
+                </span>
               </div>
               {event.location && (
                 <div className="flex items-center gap-2 text-secondary text-xs">
@@ -169,7 +193,7 @@ export default function EventCard({ event, index = 0 }) {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 10 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()} // Évite de fermer en cliquant sur l'image
+              onClick={(e) => e.stopPropagation()}
               className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-xl shadow-2xl border border-white/5 bg-neutral-900"
             >
               <img

@@ -5,7 +5,8 @@ import { Calendar, MapPin, Clock, Users, ChevronRight, X, Loader2, Phone } from 
 import toast from 'react-hot-toast';
 import { getEvent, reserveTicket, checkPayment } from '../services/api';
 
-const API_URL = 'http://localhost:5000';
+// CORRECTION : Utilisation de la variable d'environnement ou repli vers ton API Render en production
+const API_URL = import.meta.env.VITE_API_URL || 'https://ton-api-backend.onrender.com';
 
 export default function EventDetail() {
   const { slug } = useParams();
@@ -103,27 +104,44 @@ export default function EventDetail() {
   const date = new Date(event.date);
   const validCategories = (event.categories || []).filter(c => c && c.id);
 
+  // Construit l'URL complète de l'image de la bannière
+  const fullImageUrl = event.banner_url?.startsWith('http')
+    ? event.banner_url
+    : `${API_URL}${event.banner_url || ''}`;
+
   return (
     <div className="min-h-screen pt-20 pb-20 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       {/* Banner hero */}
       <div className="relative h-64 md:h-96 overflow-hidden">
         {event.banner_url ? (
-          <img src={`${API_URL}${event.banner_url}`} alt={event.title}
-            className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #1C3050 0%, #0D1B2E 100%)' }}>
-            <span className="font-display text-9xl tracking-widest text-white/5">
-              {event.title.slice(0, 2).toUpperCase()}
-            </span>
-          </div>
-        )}
+          <img 
+            src={fullImageUrl} 
+            alt={event.title}
+            className="w-full h-full object-cover" 
+            onError={(e) => {
+              // Gestion de repli si l'image distante échoue
+              e.target.style.display = 'none';
+              e.target.nextSibling?.classList.remove('hidden');
+            }}
+          />
+        ) : null}
+
+        {/* Bloc visuel de remplacement en cas d'absence d'image ou d'erreur de chargement */}
+        <div className={`w-full h-full ${event.banner_url ? 'hidden' : 'flex'} items-center justify-center`}
+          style={{ background: 'linear-gradient(135deg, #1C3050 0%, #0D1B2E 100%)' }}>
+          <span className="font-display text-9xl tracking-widest text-white/5">
+            {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
+          </span>
+        </div>
+
         <div className="absolute inset-0"
           style={{ background: 'linear-gradient(to top, var(--bg-base) 0%, rgba(5,12,24,0.4) 50%, transparent 100%)' }} />
         <div className="absolute bottom-6 left-6 right-6">
-          <span className="text-white text-xs font-bold px-3 py-1 rounded-full tracking-wider mb-3 inline-block" style={{ backgroundColor: 'var(--brand)' }}>
-            {event.organizer}
-          </span>
+          {event.organizer && (
+            <span className="text-white text-xs font-bold px-3 py-1 rounded-full tracking-wider mb-3 inline-block" style={{ backgroundColor: 'var(--brand)' }}>
+              {event.organizer}
+            </span>
+          )}
           <h1 className="font-display text-4xl md:text-6xl tracking-wide text-white leading-tight">
             {event.title}
           </h1>
@@ -136,8 +154,8 @@ export default function EventDetail() {
           {/* Meta card */}
           <div className="card p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { icon: Calendar, label: 'Date', value: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) },
-              { icon: Clock,    label: 'Heure', value: date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) },
+              { icon: Calendar, label: 'Date', value: !isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '—' },
+              { icon: Clock,    label: 'Heure', value: !isNaN(date.getTime()) ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—' },
               { icon: MapPin,   label: 'Lieu', value: event.location || '—' },
               { icon: Users,    label: 'Places restantes', value: `${event.available_tickets}` },
             ].map((d, i) => (
