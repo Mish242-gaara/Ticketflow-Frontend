@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="15" fill="#0D1B2E"/>
+  <rect x="0" y="0" width="3" height="512" fill="#C0392B"/>
+  <rect x="15" y="30" width="66" height="36" rx="4" fill="#1C3050"/>
+  <circle cx="15" cy="48" r="5" fill="#0D1B2E"/>
+  <circle cx="81" cy="48" r="5" fill="#0D1B2E"/>
+  <text x="27" y="52" font-family="Arial Black,sans-serif" font-size="21" font-weight="900" fill="#FFFFFF">TF</text>
+  <circle cx="75" cy="36" r="2" fill="#C0392B"/>
+</svg>
