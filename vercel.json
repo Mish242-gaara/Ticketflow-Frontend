@@ -3,6 +3,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://ticketflow-backend-9xkf.onrender.com/api/:path*"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
