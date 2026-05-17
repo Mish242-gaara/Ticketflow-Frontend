@@ -96,11 +96,7 @@ export default function Login() {
           </p>
         </form>
 
-        <div className="mt-4 card p-3" style={{ border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.08)' }}>
-          <p className="text-yellow-600 dark:text-yellow-400 text-xs text-center font-semibold">
-            🔑 Admin: <span className="font-mono">admin@estam.cg</span> / <span className="font-mono">admin1234</span>
-          </p>
-        </div>
+        
       </motion.div>
     </div>
   );
