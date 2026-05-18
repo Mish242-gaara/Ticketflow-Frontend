@@ -6,22 +6,33 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
+      '/api':     { target: 'http://localhost:5000', changeOrigin: true },
       '/uploads': { target: 'http://localhost:5000', changeOrigin: true },
     },
+    // Filtre pour masquer les avertissements de sourcemaps manquants
+    sourcemapIgnoreList: (sourcePath) => sourcePath.includes('node_modules'),
+  },
+  optimizeDeps: {
+    // Exclure html5-qrcode de l'optimisation pour éviter les problèmes
+    exclude: ['html5-qrcode'],
   },
   build: {
-    // Optimisations pour PWA
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor:   ['react', 'react-dom', 'react-router-dom'],
-          motion:   ['framer-motion'],
-          charts:   ['recharts'],
-          scanner:  ['html5-qrcode'],
+          vendor:  ['react', 'react-dom', 'react-router-dom'],
+          motion:  ['framer-motion'],
+          charts:  ['recharts'],
+          qrcode:  ['html5-qrcode'], // Chunk séparé pour html5-qrcode
         },
       },
     },
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 900,
+  },
+  // Désactiver les avertissements de React Router v7
+  esbuild: {
+    define: {
+      global: 'window',
+    },
   },
 });
