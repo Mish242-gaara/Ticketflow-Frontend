@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, MapPin, Clock, Users, ChevronRight, X, Loader2, Phone, CheckCircle2, MessageSquare } from 'lucide-react';
+import { Calendar, MapPin, Clock, Users, ChevronRight, X, Loader2, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getEvent, reserveTicket } from '../services/api';
 
@@ -11,6 +11,9 @@ const API_URL = 'http://localhost:5000';
 const MOMO_NUMBER_MTN = "+242 06 414 91 49";
 const MOMO_NUMBER_AIRTEL = "+242 05 509 58 63";
 const WHATSAPP_ADMIN_PHONE = "242064149149"; // Format international sans le "+" pour l'URL WhatsApp
+
+// Image de secours pour la bannière
+const FALLBACK_BANNER_URL = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3";
 
 export default function EventDetail() {
   const { slug } = useParams();
@@ -24,12 +27,18 @@ export default function EventDetail() {
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [momoRef, setMomoRef] = useState('');
   const [form, setForm] = useState({
-    holder_name: '', holder_phone: '', holder_email: '', payment_method: 'mtn',
+    holder_name: '',
+    holder_phone: '',
+    holder_email: '',
+    payment_method: 'mtn',
   });
 
   useEffect(() => {
     getEvent(slug)
-      .then(r => setEvent(r.data.event))
+      .then((r) => {
+        console.log("Données de l'événement :", r.data.event); // ✅ Pour déboguer
+        setEvent(r.data.event);
+      })
       .catch(() => toast.error('Événement introuvable'))
       .finally(() => setLoading(false));
   }, [slug]);
@@ -71,14 +80,15 @@ export default function EventDetail() {
     const price = parseInt(selectedCat.price).toLocaleString();
     const networkName = form.payment_method === 'mtn' ? 'MTN MoMo' : 'Airtel Money';
 
-    const message = `Bonjour, je viens de réserver un ticket pour l'événement *${event.title}*.\n\n` +
-                    `👤 *Nom :* ${form.holder_name}\n` +
-                    `📞 *Téléphone :* ${form.holder_phone}\n` +
-                    `🎟️ *Catégorie :* ${selectedCat.name} (${price} FCFA)\n` +
-                    `🟡 *Mode :* ${networkName}\n` +
-                    `🆔 *Référence Système :* ${txRef}\n` +
-                    `🧾 *Référence Transaction MoMo :* ${momoRef.trim() || 'Non fournie'}\n\n` +
-                    `Merci de valider mon ticket !`;
+    const message =
+      `Bonjour, je viens de réserver un ticket pour l'événement *${event.title}*.\n\n` +
+      `👤 *Nom :* ${form.holder_name}\n` +
+      `📞 *Téléphone :* ${form.holder_phone}\n` +
+      `🎟️ *Catégorie :* ${selectedCat.name} (${price} FCFA)\n` +
+      `🟡 *Mode :* ${networkName}\n` +
+      `🆔 *Référence Système :* ${txRef}\n` +
+      `🧾 *Référence Transaction MoMo :* ${momoRef.trim() || 'Non fournie'}\n\n` +
+      `Merci de valider mon ticket !`;
 
     const whatsappUrl = `https://wa.me/${WHATSAPP_ADMIN_PHONE}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -98,40 +108,72 @@ export default function EventDetail() {
     setMomoRef('');
   };
 
-  if (loading) return (
-    <div className="min-h-screen pt-24 flex items-center justify-center">
-      <Loader2 size={40} className="animate-spin" style={{ color: 'var(--brand)' }} />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="min-h-screen pt-24 flex items-center justify-center">
+        <Loader2 size={40} className="animate-spin" style={{ color: 'var(--brand)' }} />
+      </div>
+    );
+  }
 
-  if (!event) return (
-    <div className="min-h-screen pt-24 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>
-      Événement introuvable.
-    </div>
-  );
+  if (!event) {
+    return (
+      <div className="min-h-screen pt-24 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>
+        Événement introuvable.
+      </div>
+    );
+  }
 
   const date = new Date(event.date);
-  const validCategories = (event.categories || []).filter(c => c && c.id);
+  const validCategories = (event.categories || []).filter((c) => c && c.id);
+
+  // ✅ Fonction pour obtenir l'URL de la bannière
+  const getBannerUrl = () => {
+    if (!event.banner_url) return null;
+    // Si l'URL est déjà absolue (commence par http:// ou https://)
+    if (event.banner_url.startsWith('http://') || event.banner_url.startsWith('https://')) {
+      return event.banner_url;
+    }
+    // Sinon, préfixe avec API_URL
+    return `${API_URL}${event.banner_url.startsWith('/') ? '' : '/'}${event.banner_url}`;
+  };
+
+  const bannerUrl = getBannerUrl();
 
   return (
     <div className="min-h-screen pt-20 pb-20" style={{ backgroundColor: 'var(--bg-base)' }}>
       {/* Banner hero */}
       <div className="relative h-64 md:h-96 overflow-hidden">
-        {event.banner_url ? (
-          <img src={`${API_URL}${event.banner_url}`} alt={event.title}
-            className="w-full h-full object-cover" />
+        {bannerUrl ? (
+          <img
+            src={bannerUrl}
+            alt={event.title}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.onerror = null; // Évite les boucles infinies
+              e.target.src = FALLBACK_BANNER_URL;
+            }}
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #1C3050 0%, #0D1B2E 100%)' }}>
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #1C3050 0%, #0D1B2E 100%)' }}
+          >
             <span className="font-display text-9xl tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
               {event.title.slice(0, 2).toUpperCase()}
             </span>
           </div>
         )}
-        <div className="absolute inset-0"
-          style={{ background: 'linear-gradient(to top, var(--bg-base) 0%, rgba(13,27,46,0.5) 50%, transparent 100%)' }} />
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(to top, var(--bg-base) 0%, rgba(13, 27, 46, 0.5) 50%, transparent 100%)',
+          }}
+        />
         <div className="absolute bottom-6 left-6 right-6">
-          <span className="bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full tracking-wider mb-3 inline-block">
+          <span
+            className="bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full tracking-wider mb-3 inline-block"
+          >
             {event.organizer}
           </span>
           <h1 className="font-display text-4xl md:text-6xl tracking-wide text-white leading-tight">
@@ -146,16 +188,30 @@ export default function EventDetail() {
           {/* Meta card */}
           <div className="card p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { icon: Calendar, label: 'Date', value: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) },
-              { icon: Clock,    label: 'Heure', value: date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) },
-              { icon: MapPin,   label: 'Lieu', value: event.location || '—' },
-              { icon: Users,    label: 'Places restantes', value: `${event.available_tickets}` },
+              {
+                icon: Calendar,
+                label: 'Date',
+                value: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }),
+              },
+              {
+                icon: Clock,
+                label: 'Heure',
+                value: date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              },
+              { icon: MapPin, label: 'Lieu', value: event.location || '—' },
+              {
+                icon: Users,
+                label: 'Places restantes',
+                value: `${event.available_tickets}`,
+              },
             ].map((d, i) => (
               <div key={i}>
                 <div className="flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                   <d.icon size={11} /> {d.label}
                 </div>
-                <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--text-primary)' }}>{d.value}</p>
+                <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--text-primary)' }}>
+                  {d.value}
+                </p>
               </div>
             ))}
           </div>
@@ -163,7 +219,9 @@ export default function EventDetail() {
           {/* Description */}
           {(event.long_description || event.description) && (
             <div className="card p-6">
-              <h2 className="font-bold text-lg mb-3" style={{ color: 'var(--text-primary)' }}>À propos</h2>
+              <h2 className="font-bold text-lg mb-3" style={{ color: 'var(--text-primary)' }}>
+                À propos
+              </h2>
               <p className="leading-relaxed text-sm" style={{ color: 'var(--text-secondary)' }}>
                 {event.long_description || event.description}
               </p>
@@ -173,38 +231,56 @@ export default function EventDetail() {
 
         {/* Ticket selector */}
         <div className="space-y-4">
-          <h2 className="font-display text-2xl tracking-wide" style={{ color: 'var(--text-primary)' }}>CHOISIR UN TICKET</h2>
+          <h2 className="font-display text-2xl tracking-wide" style={{ color: 'var(--text-primary)' }}>
+            CHOISIR UN TICKET
+          </h2>
 
           {validCategories.length === 0 ? (
             <div className="card p-6 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
               Aucune catégorie disponible.
             </div>
           ) : (
-            validCategories.map(cat => {
+            validCategories.map((cat) => {
               const isFull = cat.available_quantity <= 0;
               const isFree = parseFloat(cat.price) === 0;
               return (
-                <button key={cat.id}
-                  onClick={() => { if (!isFull) { setSelectedCat(cat); setShowForm(true); } }}
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    if (!isFull) {
+                      setSelectedCat(cat);
+                      setShowForm(true);
+                    }
+                  }}
                   disabled={isFull}
                   className={`w-full card p-4 text-left transition-all ${
                     !isFull ? 'hover:border-brand/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
                   }`}
                   style={{
-                    border: selectedCat?.id === cat.id ? `2px solid ${cat.color}` : '2px solid transparent'
+                    border: selectedCat?.id === cat.id ? `2px solid ${cat.color}` : '2px solid transparent',
                   }}
                 >
                   <div className="flex items-start justify-between mb-1.5">
-                    <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
+                    <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {cat.name}
+                    </span>
                     <span className="font-display text-lg leading-none" style={{ color: cat.color }}>
                       {isFree ? 'GRATUIT' : `${parseInt(cat.price).toLocaleString()} F`}
                     </span>
                   </div>
                   {cat.description && (
-                    <p className="text-xs mb-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{cat.description}</p>
+                    <p className="text-xs mb-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                      {cat.description}
+                    </p>
                   )}
                   <div className="flex items-center justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>{isFull ? '⛔ Complet' : `${cat.available_quantity} place${cat.available_quantity > 1 ? 's' : ''} restante${cat.available_quantity > 1 ? 's' : ''}`}</span>
+                    <span>
+                      {isFull
+                        ? '⛔ Complet'
+                        : `${cat.available_quantity} place${cat.available_quantity > 1 ? 's' : ''} restante${
+                            cat.available_quantity > 1 ? 's' : ''
+                          }`}
+                    </span>
                     {!isFull && <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
                   </div>
                 </button>
@@ -218,13 +294,17 @@ export default function EventDetail() {
       <AnimatePresence>
         {showForm && selectedCat && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4"
             style={{ background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(6px)' }}
             onClick={(e) => e.target === e.currentTarget && closeModal()}
           >
             <motion.div
-              initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
               className="card w-full max-w-md p-6 space-y-4"
             >
               {/* Header */}
@@ -238,14 +318,20 @@ export default function EventDetail() {
               </div>
 
               {/* Summary */}
-              <div className="rounded-xl p-3 flex justify-between items-center"
+              <div
+                className="rounded-xl p-3 flex justify-between items-center"
                 style={{
                   background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border)'
-                }}>
+                  border: '1px solid var(--border)',
+                }}
+              >
                 <div>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{event.title}</p>
-                  <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--text-primary)' }}>{selectedCat.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {event.title}
+                  </p>
+                  <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--text-primary)' }}>
+                    {selectedCat.name}
+                  </p>
                 </div>
                 <span className="font-display text-xl" style={{ color: selectedCat.color }}>
                   {parseFloat(selectedCat.price) === 0 ? 'GRATUIT' : `${parseInt(selectedCat.price).toLocaleString()} FCFA`}
@@ -255,28 +341,39 @@ export default function EventDetail() {
               {waitingPayment ? (
                 /* INTERFACE D'INSTRUCTIONS ET VALIDATION MANUELLE */
                 <div className="space-y-4 py-2">
-                  <div className="rounded-xl p-4 space-y-3" style={{
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border)'
-                  }}>
+                  <div
+                    className="rounded-xl p-4 space-y-3"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
                     <p className="font-medium" style={{ color: 'var(--text-primary)' }}>
                       Pour activer votre ticket, effectuez le transfert manuel suivant :
                     </p>
-                    <div className="p-3 rounded-lg" style={{
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--border)'
-                    }}>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Montant exact à envoyer :</p>
+                    <div
+                      className="p-3 rounded-lg"
+                      style={{
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Montant exact à envoyer :
+                      </p>
                       <p className="text-xl font-bold" style={{ color: 'var(--brand)' }}>
                         {parseInt(selectedCat.price).toLocaleString()} FCFA
                       </p>
-                      <p className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>Vers le numéro de l'organisateur :</p>
+                      <p className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>
+                        Vers le numéro de l'organisateur :
+                      </p>
                       <p className="text-base font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
                         {form.payment_method === 'mtn' ? `🟡 MTN : ${MOMO_NUMBER_MTN}` : `🔴 Airtel : ${MOMO_NUMBER_AIRTEL}`}
                       </p>
                     </div>
                     <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                      💡 Une fois le transfert Mobile Money complété, copiez la référence de la transaction reçue par SMS ci-dessous, puis cliquez sur le bouton vert pour m'envoyer la demande de validation.
+                      💡 Une fois le transfert Mobile Money complété, copiez la référence de la transaction reçue par SMS
+                      ci-dessous, puis cliquez sur le bouton vert pour m'envoyer la demande de validation.
                     </p>
                   </div>
 
@@ -289,11 +386,11 @@ export default function EventDetail() {
                       className="input-field font-mono"
                       placeholder="Ex: MP260519.1102.A00123"
                       value={momoRef}
-                      onChange={e => setMomoRef(e.target.value)}
+                      onChange={(e) => setMomoRef(e.target.value)}
                       style={{
                         background: 'var(--input-bg)',
                         border: '1px solid var(--border)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                     />
                   </div>
@@ -311,46 +408,52 @@ export default function EventDetail() {
                 /* Formulaire de saisie classique (Étape 1) */
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Nom complet *</label>
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                      Nom complet *
+                    </label>
                     <input
                       className="input-field"
                       placeholder="Jean-Paul Mbemba"
                       value={form.holder_name}
-                      onChange={e => setForm(f => ({ ...f, holder_name: e.target.value }))}
+                      onChange={(e) => setForm((f) => ({ ...f, holder_name: e.target.value }))}
                       style={{
                         background: 'var(--input-bg)',
                         border: '1px solid var(--border)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Téléphone *</label>
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                      Téléphone *
+                    </label>
                     <input
                       className="input-field"
                       placeholder="+242 06 XXX XX XX"
                       type="tel"
                       value={form.holder_phone}
-                      onChange={e => setForm(f => ({ ...f, holder_phone: e.target.value }))}
+                      onChange={(e) => setForm((f) => ({ ...f, holder_phone: e.target.value }))}
                       style={{
                         background: 'var(--input-bg)',
                         border: '1px solid var(--border)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Email (optionnel)</label>
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                      Email (optionnel)
+                    </label>
                     <input
                       className="input-field"
                       placeholder="email@exemple.com"
                       type="email"
                       value={form.holder_email}
-                      onChange={e => setForm(f => ({ ...f, holder_email: e.target.value }))}
+                      onChange={(e) => setForm((f) => ({ ...f, holder_email: e.target.value }))}
                       style={{
                         background: 'var(--input-bg)',
                         border: '1px solid var(--border)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
                       }}
                     />
                   </div>
@@ -362,13 +465,13 @@ export default function EventDetail() {
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         {[
-                          { id: 'mtn',    label: '🟡 MTN MoMo' },
+                          { id: 'mtn', label: '🟡 MTN MoMo' },
                           { id: 'airtel', label: '🔴 Airtel Money' },
-                        ].map(m => (
+                        ].map((m) => (
                           <button
                             key={m.id}
                             type="button"
-                            onClick={() => setForm(f => ({ ...f, payment_method: m.id }))}
+                            onClick={() => setForm((f) => ({ ...f, payment_method: m.id }))}
                             className="py-2.5 rounded-xl text-sm font-bold transition-all"
                             style={{
                               border: form.payment_method === m.id ? `2px solid ${m.id === 'mtn' ? '#FFD700' : '#E50914'}` : '2px solid var(--border)',
@@ -396,7 +499,7 @@ export default function EventDetail() {
                     ? 'Traitement...'
                     : parseFloat(selectedCat.price) === 0
                     ? '🎟️ Réserver gratuitement'
-                    : `💳 Réserver et voir les instructions`}
+                    : '💳 Réserver et voir les instructions'}
                 </button>
               )}
             </motion.div>
