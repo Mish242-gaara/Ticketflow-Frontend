@@ -2,19 +2,25 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/index.css';
-import useThemeStore from './store/themeStore';
 
-// Initialiser le thème au démarrage
-const { initTheme, setTheme } = useThemeStore.getState();
-initTheme();
+// --- 1. Nettoyer le cache et les Service Workers avant rafraîchissement ---
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach(registration => registration.unregister());
+  });
+}
 
-// Écouter les changements du thème système
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const { theme } = useThemeStore.getState();
-  if (theme === 'system') setTheme('system'); // re-appliquer
+window.addEventListener('beforeunload', () => {
+  if ('caches' in window) {
+    caches.keys().then(cacheNames => {
+      cacheNames.forEach(cacheName => {
+        caches.delete(cacheName);
+      });
+    });
+  }
 });
 
-// Enregistrer le Service Worker
+// --- 2. Enregistrer le Service Worker (après nettoyage) ---
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
@@ -26,7 +32,6 @@ if ('serviceWorker' in navigator) {
         const newWorker = reg.installing;
         newWorker?.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // Notifier l'utilisateur d'une mise à jour disponible
             window.dispatchEvent(new CustomEvent('sw-update'));
           }
         });
@@ -37,7 +42,9 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+// --- 3. Montage unique de l'application ---
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
   <React.StrictMode>
     <App />
   </React.StrictMode>

@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#C0392B"/>
-  <rect x="60" y="60" width="392" height="392" rx="30" fill="#0D1B2E"/>
-  <rect x="100" y="160" width="312" height="192" rx="16" fill="#1C3050"/>
-  <circle cx="100" cy="256" r="22" fill="#0D1B2E"/>
-  <circle cx="412" cy="256" r="22" fill="#0D1B2E"/>
-  <text x="148" y="280" font-family="Arial Black,sans-serif" font-size="100" font-weight="900" fill="#FFFFFF">TF</text>
-</svg>

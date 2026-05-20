@@ -3,17 +3,20 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, MapPin, Users, Ticket, Maximize2, X } from 'lucide-react';
 
-// CORRECTION : Utilisation de la variable d'environnement ou repli vers ton API Render en production
-const API_URL = import.meta.env.VITE_API_URL || 'https://ton-api-backend.onrender.com';
+// URL de base pour les images (à adapter selon ton environnement)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function EventCard({ event, index = 0 }) {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [imageError, setImageError] = useState(false); // État pour gérer les erreurs de chargement
   const date = new Date(event?.date);
 
+  // Calcul de la disponibilité en pourcentage
   const availPct = event?.total_tickets > 0
     ? Math.round((event.available_tickets / event.total_tickets) * 100)
     : 0;
 
+  // Calcul du prix minimum
   const minPrice = event?.categories
     ?.filter(c => c && c.id)
     .reduce((min, c) => {
@@ -22,13 +25,23 @@ export default function EventCard({ event, index = 0 }) {
     }, Infinity);
 
   const hasFree = minPrice === 0;
-  
-  // Construit l'URL complète de l'image de manière sécurisée
-  const fullImageUrl = event?.banner_url?.startsWith('http') 
-    ? event.banner_url 
-    : `${API_URL}${event?.banner_url || ''}`;
 
-  // Ouvre l'image en plein écran sans déclencher le lien de la carte
+  // Construction de l'URL de l'image avec gestion des cas
+  const getImageUrl = () => {
+    if (!event?.banner_url) return null;
+
+    // Si l'URL est déjà complète (commence par http:// ou https://)
+    if (event.banner_url.startsWith('http://') || event.banner_url.startsWith('https://')) {
+      return event.banner_url;
+    }
+
+    // Sinon, construire l'URL complète à partir de API_URL
+    return `${API_URL.replace(/\/$/, '')}/${event.banner_url.replace(/^\//, '')}`;
+  };
+
+  const fullImageUrl = getImageUrl();
+
+  // Ouvre l'image en plein écran
   const openLightbox = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -39,27 +52,26 @@ export default function EventCard({ event, index = 0 }) {
 
   return (
     <>
+      {/* Carte d'événement */}
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: index * 0.1, duration: 0.4 }}
         whileHover={{ y: -4 }}
         className="card card-hover overflow-hidden group cursor-pointer"
+        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border)' }}
       >
         <Link to={`/events/${event.slug}`}>
-          {/* Banner */}
-          <div className="relative h-44 overflow-hidden" style={{ background: 'linear-gradient(135deg, #142338 0%, #1C3050 100%)' }}>
-            {event.banner_url ? (
+          {/* Bannière de l'événement */}
+          <div className="relative h-44 overflow-hidden bg-gray-800">
+            {/* Afficher l'image si elle existe et qu'il n'y a pas d'erreur */}
+            {fullImageUrl && !imageError ? (
               <>
                 <img
                   src={fullImageUrl}
-                  alt={event.title}
+                  alt={event.title || 'Affiche de l\'événement'}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  onError={(e) => { 
-                    // Si l'image échoue, on affiche le bloc de texte de remplacement
-                    e.target.style.display = 'none';
-                    e.target.nextSibling?.classList.remove('hidden');
-                  }}
+                  onError={() => setImageError(true)} // Marque l'erreur si l'image ne charge pas
                 />
                 {/* Bouton pour agrandir l'affiche */}
                 <button
@@ -72,95 +84,109 @@ export default function EventCard({ event, index = 0 }) {
                 </button>
               </>
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="font-display text-6xl tracking-widest text-muted opacity-20">
+              // Fallback si pas d'image ou erreur de chargement
+              <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                <span className="font-display text-4xl tracking-widest text-white/20">
                   {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
                 </span>
               </div>
             )}
-            
-            {/* Fallback au cas où l'image dynamique plante au chargement */}
-            <div className="hidden absolute inset-0 flex items-center justify-center bg-slate-900">
-              <span className="font-display text-6xl tracking-widest text-muted opacity-20">
-                {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
-              </span>
-            </div>
 
-            {/* Dégradé d'ombrage pour le bas de la bannière d'image */}
-            <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(5,12,24,0.4) 0%, transparent 60%)' }} />
+            {/* Dégradé pour ombrager le bas de la bannière */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)' }}
+            />
 
-            {/* Date badge */}
-            <div className="absolute top-3 left-3 bg-brand-500 text-white text-xs font-bold px-2 py-1 rounded-lg tracking-wide">
+            {/* Badge de date (rouge Tikerama) */}
+            <div
+              className="absolute top-3 left-3 text-white text-xs font-bold px-2 py-1 rounded-lg tracking-wide"
+              style={{ backgroundColor: 'var(--brand)' }}
+            >
               {!isNaN(date.getTime()) ? date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase() : 'ND'}
             </div>
 
-            {/* Organizer */}
+            {/* Organisateur */}
             {event.organizer && (
-              <div className="absolute top-3 right-3 bg-black/40 backdrop-blur-sm text-white/80 text-xs font-semibold px-2 py-1 rounded-lg">
+              <div
+                className="absolute top-3 right-3 backdrop-blur-sm text-white/80 text-xs font-semibold px-2 py-1 rounded-lg"
+                style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+              >
                 {event.organizer}
               </div>
             )}
 
-            {/* Stock bar */}
+            {/* Barre de disponibilité (rouge/vert/jaune) */}
             <div className="absolute bottom-0 left-0 right-0 h-1" style={{ background: 'rgba(255,255,255,0.1)' }}>
               <div
                 className="h-full transition-all duration-500"
                 style={{
                   width: `${availPct}%`,
-                  background: availPct > 50 ? 'var(--success)' : availPct > 20 ? 'var(--warning)' : '#EF4444',
+                  background: availPct > 50
+                    ? 'var(--success)'
+                    : availPct > 20
+                      ? 'var(--warning)'
+                      : 'var(--brand)',
                 }}
               />
             </div>
           </div>
 
-          {/* Body */}
+          {/* Corps de la carte */}
           <div className="p-4">
-            <h3 className="font-bold text-primary text-lg leading-tight mb-2 group-hover:text-accent transition-colors"
-              style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            <h3
+              className="font-bold text-lg leading-tight mb-2 group-hover:text-[var(--brand)] transition-colors"
+              style={{ color: 'var(--text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+            >
               {event.title}
             </h3>
 
+            {/* Détails de l'événement */}
             <div className="flex flex-col gap-1.5 mb-3">
-              <div className="flex items-center gap-2 text-secondary text-xs">
-                <Calendar size={11} className="flex-shrink-0" />
+              <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                <Calendar size={11} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />
                 <span>
-                  {!isNaN(date.getTime()) 
+                  {!isNaN(date.getTime())
                     ? date.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-                    : 'Date non définie'
-                  }
+                    : 'Date non définie'}
                 </span>
               </div>
               {event.location && (
-                <div className="flex items-center gap-2 text-secondary text-xs">
-                  <MapPin size={11} className="flex-shrink-0" />
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  <MapPin size={11} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />
                   <span className="truncate">{event.location}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2 text-secondary text-xs">
-                <Users size={11} className="flex-shrink-0" />
+              <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                <Users size={11} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />
                 <span>
                   {event.available_tickets > 0
                     ? `${event.available_tickets} place${event.available_tickets > 1 ? 's' : ''} restante${event.available_tickets > 1 ? 's' : ''}`
-                    : 'Complet'}
+                    : <span style={{ color: 'var(--brand)' }}>Complet</span>}
                 </span>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between pt-2 divider border-t">
+            {/* Pied de la carte */}
+            <div className="flex items-center justify-between pt-2 divider" style={{ borderTopColor: 'var(--border)' }}>
               <div>
                 {hasFree ? (
                   <span className="font-bold text-sm flex items-center gap-1" style={{ color: 'var(--success)' }}>
                     🎓 Accès gratuit
                   </span>
                 ) : minPrice !== Infinity ? (
-                  <span className="text-primary font-semibold text-sm">
-                    Dès <span className="font-bold" style={{ color: 'var(--accent)' }}>{parseInt(minPrice).toLocaleString()} FCFA</span>
+                  <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                    Dès <span className="font-bold" style={{ color: 'var(--brand)' }}>{parseInt(minPrice).toLocaleString()} FCFA</span>
                   </span>
                 ) : null}
               </div>
-              <span className="text-xs font-bold flex items-center gap-1 px-2 py-1 rounded-lg"
-                style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--accent)' }}>
+              <span
+                className="text-xs font-bold flex items-center gap-1 px-2 py-1 rounded-lg transition-colors"
+                style={{
+                  backgroundColor: 'rgba(229, 9, 20, 0.1)',
+                  color: 'var(--brand)',
+                }}
+              >
                 <Ticket size={10} /> Réserver
               </span>
             </div>
@@ -168,9 +194,9 @@ export default function EventCard({ event, index = 0 }) {
         </Link>
       </motion.div>
 
-      {/* ── LIGHTBOX (MODALE PLEIN ÉCRAN) ───────────────────────────────── */}
+      {/* Lightbox (modale plein écran) */}
       <AnimatePresence>
-        {isLightboxOpen && (
+        {isLightboxOpen && fullImageUrl && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -198,11 +224,12 @@ export default function EventCard({ event, index = 0 }) {
             >
               <img
                 src={fullImageUrl}
-                alt={event.title}
+                alt={event.title || 'Affiche de l\'événement'}
                 className="w-full h-full object-contain max-h-[85vh]"
+                onError={() => setIsLightboxOpen(false)} // Ferme la lightbox si l'image ne charge pas
               />
-              
-              {/* Infos rapides au bas de l'image zoomée */}
+
+              {/* Infos au bas de l'image zoomée */}
               <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
                 <p className="text-white font-bold text-lg">{event.title}</p>
                 {event.organizer && <p className="text-white/60 text-xs">{event.organizer}</p>}

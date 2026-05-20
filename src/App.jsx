@@ -1,34 +1,45 @@
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import Navbar       from './components/Navbar';
-import InstallPWA   from './components/InstallPWA';
+import { Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion'; // Import pour les composants motion
+
+import About from './pages/about'; // Importez vos pages !
+
+
+// --- Composants ---
+import Navbar from './components/Navbar';
+import InstallPWA from './components/InstallPWA';
 import UpdateBanner from './components/UpdateBanner';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoute';
 import useThemeStore from './store/themeStore';
 
-import Home         from './pages/Home';
-import Events       from './pages/Events';
-import EventDetail  from './pages/EventDetail';
-import TicketPage   from './pages/TicketPage';
-import MyTickets    from './pages/MyTickets';
-import Scanner      from './pages/Scanner';
-import Admin        from './pages/Admin';
-import AdminUsers   from './pages/AdminUsers';
-import CreateEvent  from './pages/CreateEvent';
-import EditEvent    from './pages/EditEvent';
-import Login        from './pages/Login';
-import Register     from './pages/Register';
-import AuthCallback from './pages/AuthCallback';
+// --- 1. Composant ThemeProvider pour gérer le thème ---
+function ThemeProvider({ children }) {
+  const { theme, initTheme, setTheme } = useThemeStore();
 
-export default function App() {
-  const { theme } = useThemeStore();
+  // Initialiser le thème au montage
+  useEffect(() => {
+    initTheme();
+  }, [initTheme]);
 
-  // Calculer si on est en dark pour les toasts
+  // Écouter les changements du thème système
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      const currentTheme = useThemeStore.getState().theme;
+      if (currentTheme === 'system') setTheme('system');
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [setTheme]);
+
+  // Calculer si on est en mode sombre pour les toasts
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const isDark = theme === 'dark' || (theme === 'system' && prefersDark);
 
   return (
-    <BrowserRouter>
+    <>
       <Toaster
         position="top-center"
         toastOptions={{
@@ -40,41 +51,109 @@ export default function App() {
             boxShadow: '0 4px 24px rgba(0,0,0,0.2)',
           },
           success: { iconTheme: { primary: '#10B981', secondary: '#fff' } },
-          error:   { iconTheme: { primary: '#EF4444', secondary: '#fff' } },
+          error: { iconTheme: { primary: '#EF4444', secondary: '#fff' } },
         }}
       />
-      <UpdateBanner />
-      <Navbar />
-      <InstallPWA />
+      {children}
+    </>
+  );
+}
 
-      <Routes>
-        {/* Public */}
-        <Route path="/"              element={<Home />} />
-        <Route path="/events"        element={<Events />} />
-        <Route path="/events/:slug"  element={<EventDetail />} />
-        <Route path="/ticket/:uuid"  element={<TicketPage />} />
-        <Route path="/login"         element={<Login />} />
-        <Route path="/register"      element={<Register />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
+// --- 2. Chargement paresseux (Lazy Loading) des pages ---
+const Home = lazy(() => import('./pages/Home'));
+const Events = lazy(() => import('./pages/Events'));
+const EventDetail = lazy(() => import('./pages/EventDetail'));
+const TicketPage = lazy(() => import('./pages/TicketPage'));
+const MyTickets = lazy(() => import('./pages/MyTickets'));
+const Scanner = lazy(() => import('./pages/Scanner'));
+const Admin = lazy(() => import('./pages/Admin'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const CreateEvent = lazy(() => import('./pages/CreateEvent'));
+const EditEvent = lazy(() => import('./pages/EditEvent'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 
-        {/* Connecté */}
-        <Route path="/my-tickets" element={<ProtectedRoute><MyTickets /></ProtectedRoute>} />
+// --- 3. Composant principal App ---
+export default function App() {
+  const [appKey, setAppKey] = useState(0);
 
-        {/* Admin */}
-        <Route path="/scanner"              element={<AdminRoute><Scanner /></AdminRoute>} />
-        <Route path="/admin"                element={<AdminRoute><Admin /></AdminRoute>} />
-        <Route path="/admin/users"          element={<AdminRoute><AdminUsers /></AdminRoute>} />
-        <Route path="/admin/create-event"   element={<AdminRoute><CreateEvent /></AdminRoute>} />
-        <Route path="/admin/edit-event/:id" element={<AdminRoute><EditEvent /></AdminRoute>} />
+  // Forcer un rechargement complet après un rafraîchissement
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      setAppKey(prev => prev + 1);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
-        {/* 404 */}
-        <Route path="*" element={
-          <div className="min-h-screen flex flex-col items-center justify-center" style={{ color: 'var(--text-muted)' }}>
-            <p className="font-display text-8xl tracking-widest mb-4" style={{ color: 'var(--brand)' }}>404</p>
-            <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>Page introuvable</p>
-          </div>
-        } />
-      </Routes>
-    </BrowserRouter>
+  return (
+    // ✅ Clé unique pour forcer le rechargement complet de l'application
+    <div key={appKey}>
+      <ThemeProvider>
+        <BrowserRouter>
+          <UpdateBanner />
+          <Navbar />
+          <InstallPWA />
+
+          {/* Suspense pour le chargement asynchrone */}
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
+            </div>
+          }>
+            <Routes>
+              {/* Routes publiques */}
+              <Route path="/" element={<Home />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/events/:slug" element={<EventDetail />} />
+              <Route path="/ticket/:uuid" element={<TicketPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+
+              {/* Routes protégées (nécessitent une connexion) */}
+              <Route
+                path="/my-tickets"
+                element={<ProtectedRoute><MyTickets /></ProtectedRoute>}
+              />
+
+              {/* Routes Admin (nécessitent un rôle admin) */}
+              <Route
+                path="/scanner"
+                element={<AdminRoute><Scanner /></AdminRoute>}
+              />
+              <Route
+                path="/admin"
+                element={<AdminRoute><Admin /></AdminRoute>}
+              />
+              <Route
+                path="/admin/users"
+                element={<AdminRoute><AdminUsers /></AdminRoute>}
+              />
+              <Route
+                path="/admin/create-event"
+                element={<AdminRoute><CreateEvent /></AdminRoute>}
+              />
+              <Route
+                path="/admin/edit-event/:id"
+                element={<AdminRoute><EditEvent /></AdminRoute>}
+              />
+
+              {/* Route 404 (Page non trouvée) */}
+              <Route
+                path="*"
+                element={
+                  <div className="min-h-screen flex flex-col items-center justify-center" style={{ color: 'var(--text-muted)' }}>
+                    <p className="font-display text-8xl tracking-widest mb-4" style={{ color: 'var(--brand)' }}>404</p>
+                    <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>Page introuvable</p>
+                  </div>
+                }
+              />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ThemeProvider>
+    </div>
   );
 }

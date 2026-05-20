@@ -58,12 +58,12 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen pt-20 flex items-center justify-center px-4 py-10">
+    <div className="min-h-screen pt-20 flex items-center justify-center px-4 py-10" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         
         <div className="text-center mb-8">
-          <h1 className="font-display text-5xl tracking-widest text-white mb-2">INSCRIPTION</h1>
-          <p className="text-white/40 text-sm">Créez votre compte pour réserver vos tickets</p>
+          <h1 className="font-display text-5xl tracking-widest text-primary mb-2">INSCRIPTION</h1>
+          <p className="text-secondary text-sm">Créez votre compte pour réserver vos tickets</p>
         </div>
 
         <button 
@@ -92,9 +92,9 @@ export default function Register() {
             { key: 'confirm',  label: 'Confirmer le mot de passe', type: 'password', placeholder: '••••••••', Icon: Lock },
           ].map(f => (
             <div key={f.key}>
-              <label className="text-xs text-white/50 font-bold uppercase tracking-wider mb-1.5 block">{f.label}</label>
+              <label className="text-xs text-secondary font-bold uppercase tracking-wider mb-1.5 block">{f.label}</label>
               <div className="relative">
-                <f.Icon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <f.Icon size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-secondary" />
                 <input 
                   type={f.type} 
                   className="input-field pl-9" 
@@ -111,7 +111,7 @@ export default function Register() {
             {loading ? 'Création...' : 'Créer mon compte'}
           </button>
           
-          <p className="text-center text-white/40 text-sm pt-1">
+          <p className="text-center text-secondary text-sm pt-1">
             Déjà un compte ?{' '}
             <Link 
               to={`/login?redirect=${encodeURIComponent(redirect)}`} 

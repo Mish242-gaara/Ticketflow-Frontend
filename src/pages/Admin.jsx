@@ -1,40 +1,66 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import {
   Ticket, Users, DollarSign, ScanLine, Plus, Download,
-  Pencil, Trash2, Eye, CheckCircle, Clock
+  Pencil, Trash2, Eye, CheckCircle, Clock, Check, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getAdminStats, getAttendees } from '../services/api';
 
 export default function Admin() {
-  const [stats, setStats]         = useState(null);
-  const [events, setEvents]       = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [stats, setStats] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeEvent, setActiveEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
   const [deletingId, setDeletingId] = useState(null);
+  const [pendingTickets, setPendingTickets] = useState([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // État pour la modale de confirmation
+  const [selectedTxRef, setSelectedTxRef] = useState(null); // Stocke le txRef à valider
   const navigate = useNavigate();
 
   const loadData = async () => {
     try {
-      const [statsRes, eventsRes] = await Promise.all([
+      const [statsRes, eventsRes, pendingRes] = await Promise.all([
         getAdminStats(),
         api.get('/admin/events'),
+        api.get('/admin/tickets/pending').catch(() => ({ data: { tickets: [] } })),
       ]);
       setStats(statsRes.data.stats);
       setEvents(eventsRes.data.events || []);
-    } catch { 
-      toast.error('Erreur chargement'); 
-    } finally { 
-      setLoading(false); 
+      setPendingTickets(pendingRes.data.tickets || []);
+    } catch {
+      toast.error('Erreur chargement');
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => { loadData(); }, []);
+
+  // Fonction pour ouvrir la modale de confirmation
+  const openConfirmModal = (txRef) => {
+    setSelectedTxRef(txRef);
+    setShowConfirmModal(true);
+  };
+
+  // Fonction pour valider manuellement un paiement
+  const handleValidate = async () => {
+    if (!selectedTxRef) return;
+    try {
+      await api.post(`/admin/tickets/validate/${selectedTxRef}`, { action: 'approve' });
+      toast.success("✅ Paiement validé avec succès !");
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Erreur lors de la validation");
+    } finally {
+      setShowConfirmModal(false);
+      setSelectedTxRef(null);
+    }
+  };
 
   const loadAttendees = async (eventId) => {
     setActiveEvent(eventId);
@@ -42,8 +68,8 @@ export default function Admin() {
     try {
       const res = await getAttendees(eventId);
       setAttendees(res.data.attendees || []);
-    } catch { 
-      toast.error('Erreur chargement participants'); 
+    } catch {
+      toast.error('Erreur chargement participants');
     }
   };
 
@@ -56,8 +82,8 @@ export default function Admin() {
       setEvents(evs => evs.filter(e => e.id !== id));
     } catch (err) {
       toast.error(err.response?.data?.error || 'Erreur suppression');
-    } finally { 
-      setDeletingId(null); 
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -69,180 +95,316 @@ export default function Admin() {
     ).join('\n');
     const blob = new Blob(['\ufeff' + headers + rows], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url;
-    link.download = `participants-event-${activeEvent}.csv`; link.click();
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `participants-event-${activeEvent}.csv`;
+    link.click();
     URL.revokeObjectURL(url);
   };
 
   if (loading) return (
     <div className="min-h-screen pt-24 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-base)' }}>
-      <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--brand)' }} />
     </div>
   );
 
   const statCards = [
-    { label: 'Total tickets', value: stats?.total || 0, icon: Ticket, color: 'text-accent-500', bg: 'rgba(59,130,246,0.1)' },
-    { label: 'Actifs / Valides', value: stats?.active || 0, icon: CheckCircle, color: 'text-emerald-500', bg: 'rgba(16,185,129,0.1)' },
-    { label: 'Scannés', value: stats?.scanned || 0, icon: ScanLine, color: 'text-amber-500', bg: 'rgba(245,158,11,0.1)' },
-    { label: 'Revenus', value: `${(stats?.revenue || 0).toLocaleString()} FCFA`, icon: DollarSign, color: 'text-red-500', bg: 'rgba(192,57,43,0.1)' },
+    {
+      label: 'Total tickets',
+      value: stats?.total || 0,
+      icon: Ticket,
+      color: 'text-blue-500',
+      bg: 'rgba(59, 130, 246, 0.1)'
+    },
+    {
+      label: 'Actifs / Valides',
+      value: stats?.active || 0,
+      icon: CheckCircle,
+      color: 'text-emerald-500',
+      bg: 'rgba(16, 185, 129, 0.1)'
+    },
+    {
+      label: 'Scannés',
+      value: stats?.scanned || 0,
+      icon: ScanLine,
+      color: 'text-amber-500',
+      bg: 'rgba(245, 158, 11, 0.1)'
+    },
+    {
+      label: 'Revenus',
+      value: `${(stats?.revenue || 0).toLocaleString()} FCFA`,
+      icon: DollarSign,
+      color: 'text-rose-500',
+      bg: 'rgba(244, 63, 94, 0.1)'
+    },
   ];
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'events', label: `Événements (${events.length})` },
     { id: 'attendees', label: 'Participants' },
+    { id: 'pending', label: `Validations (${pendingTickets.length})` },
   ];
+
+  const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'http://localhost:5000';
 
   return (
     <div className="min-h-screen pt-20 pb-20 px-4 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       <div className="max-w-7xl mx-auto">
-        
         {/* Header */}
-        <div className="flex items-center justify-between mt-4 mb-6 flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-4 mb-6 gap-4">
           <div>
-            <h1 className="font-display text-4xl md:text-5xl tracking-wide text-primary">ADMIN</h1>
-            <p className="text-secondary text-sm mt-1">Tableau de bord — TicketFlow</p>
+            <h1 className="font-display text-4xl md:text-5xl tracking-wide" style={{ color: 'var(--text-primary)' }}>ADMIN</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Tableau de bord — TicketFlow</p>
           </div>
-          <div className="flex gap-3">
-            <Link to="/scanner" className="btn-secondary flex items-center gap-2 py-2 px-4 text-sm">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            <Link to="/scanner" className="btn-secondary flex items-center justify-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm flex-1 sm:flex-none">
               <ScanLine size={14} /> Scanner QR
             </Link>
-            <Link to="/admin/users" className="btn-secondary flex items-center gap-2 py-2 px-4 text-sm"><Users size={14} /> Utilisateurs</Link>
-            <Link to="/admin/create-event" className="btn-primary flex items-center gap-2 py-2 px-4 text-sm">
+            <Link to="/admin/users" className="btn-secondary flex items-center justify-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm flex-1 sm:flex-none">
+              <Users size={14} /> Utilisateurs
+            </Link>
+            <Link to="/admin/create-event" className="btn-primary flex items-center justify-center gap-2 py-2 px-3 sm:px-4 text-xs sm:text-sm w-full sm:w-auto">
               <Plus size={14} /> Nouvel événement
             </Link>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 rounded-xl p-1 mb-6 w-fit transition-colors" 
-             style={{ background: 'var(--input-bg)', border: '1px solid var(--border)' }}>
-          {tabs.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === t.id ? 'btn-primary text-white' : 'text-secondary hover:text-primary'}`}>
-              {t.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto pb-2 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
+          <div className="flex gap-1 rounded-xl p-1 w-max sm:w-fit transition-colors"
+               style={{ background: 'var(--input-bg)', border: '1px solid var(--border)' }}>
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+                  activeTab === t.id ? 'btn-primary text-white' : 'text-[var(--text-secondary)] hover:text-[var(--brand)]'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* ── DASHBOARD ─────────────────────────────────────────────────────── */}
+        {/* DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {statCards.map((s, i) => (
-                <motion.div key={i} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                  className="card p-5">
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="card p-5"
+                >
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: s.bg }}>
                     <s.icon size={18} className={s.color} />
                   </div>
-                  <p className="text-secondary text-xs font-bold uppercase tracking-wider mb-1">{s.label}</p>
-                  <p className="font-display text-2xl tracking-wide text-primary">{s.value}</p>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
+                    {s.label}
+                  </p>
+                  <p className="font-display text-xl sm:text-2xl tracking-wide" style={{ color: 'var(--text-primary)' }}>
+                    {s.value}
+                  </p>
                 </motion.div>
               ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Bar chart */}
               {stats?.by_category?.length > 0 && (
-                <div className="card p-5 lg:col-span-2">
-                  <h3 className="font-bold text-primary mb-4">Tickets par catégorie</h3>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={stats.by_category} barSize={32}>
-                      <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8 }}
-                        labelStyle={{ color: 'var(--text-primary)' }} cursor={{ fill: 'var(--input-bg)' }}
-                      />
-                      <Bar dataKey="count" radius={[6,6,0,0]} name="Tickets">
-                        {stats.by_category.map((entry, i) => (
-                          <Cell key={i} fill={entry.color || 'var(--accent)'} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="card p-5 lg:col-span-2 overflow-hidden">
+                  <h3 className="font-bold mb-4 text-sm sm:text-base" style={{ color: 'var(--text-primary)' }}>
+                    Tickets par catégorie
+                  </h3>
+                  <div className="w-full overflow-x-auto">
+                    <div className="min-w-[400px] h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={stats.by_category} barSize={32}>
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              background: 'var(--bg-card)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 8,
+                              color: 'var(--text-primary)'
+                            }}
+                            labelStyle={{ color: 'var(--text-primary)' }}
+                          />
+                          <Bar dataKey="count" radius={[6, 6, 0, 0]} name="Tickets">
+                            {stats.by_category.map((entry, i) => (
+                              <Cell key={i} fill={entry.color || 'var(--brand)'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Recent */}
               <div className="card p-5">
-                <h3 className="font-bold text-primary mb-4">Dernières réservations</h3>
-                <div className="space-y-3">
+                <h3 className="font-bold mb-4 text-sm sm:text-base" style={{ color: 'var(--text-primary)' }}>
+                  Dernières réservations
+                </h3>
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
                   {stats?.recent_tickets?.map((t, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: t.color || 'var(--accent)' }} />
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 py-1 border-b border-[var(--border)] last:border-0"
+                    >
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ background: t.color || 'var(--brand)' }}
+                      />
                       <div className="flex-1 min-w-0">
-                        <p className="text-primary text-xs font-semibold truncate">{t.holder_name}</p>
-                        <p className="text-secondary text-xs">{t.category}</p>
+                        <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                          {t.holder_name}
+                        </p>
+                        <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                          {t.category}
+                        </p>
                       </div>
-                      <span className={`text-xs font-bold ${t.status === 'active' ? 'text-emerald-500' : t.status === 'used' ? 'text-accent-500' : 'text-amber-500'}`}>
+                      <span className={`text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                        t.status === 'active'
+                          ? 'text-emerald-500 bg-emerald-500/10'
+                          : t.status === 'used'
+                          ? 'text-blue-500 bg-blue-500/10'
+                          : 'text-amber-500 bg-amber-500/10'
+                      }`}>
                         {t.status}
                       </span>
                     </div>
                   ))}
-                  {!stats?.recent_tickets?.length && <p className="text-muted text-sm">Aucune réservation</p>}
+                  {!stats?.recent_tickets?.length && (
+                    <p className="text-xs py-2" style={{ color: 'var(--text-muted)' }}>
+                      Aucune réservation
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── EVENTS CRUD ────────────────────────────────────────────────────── */}
+        {/* EVENTS CRUD */}
         {activeTab === 'events' && (
           <div className="space-y-4">
             {events.length === 0 ? (
-              <div className="text-center py-16 text-muted">
-                <Ticket size={40} className="mx-auto mb-3 opacity-30" />
-                <p>Aucun événement. <Link to="/admin/create-event" className="font-bold" style={{ color: 'var(--accent)' }}>Créez-en un</Link>.</p>
+              <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>
+                <Ticket size={40} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--brand)' }} />
+                <p className="text-sm">
+                  Aucun événement.{' '}
+                  <Link
+                    to="/admin/create-event"
+                    className="font-bold underline"
+                    style={{ color: 'var(--brand)' }}
+                  >
+                    Créez-en un
+                  </Link>.
+                </p>
               </div>
             ) : (
               events.map((ev, i) => (
-                <motion.div key={ev.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}
-                  className="card overflow-hidden flex gap-0">
-                  {/* Banner thumbnail */}
-                  <div className="w-24 md:w-32 flex-shrink-0 relative overflow-hidden" style={{ background: 'var(--input-bg)' }}>
+                <motion.div
+                  key={ev.id}
+                  initial={{ opacity: 0, x: -15 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="card overflow-hidden flex flex-col sm:flex-row gap-0"
+                >
+                  <div
+                    className="w-full sm:w-28 md:w-36 h-36 sm:h-auto flex-shrink-0 relative overflow-hidden"
+                    style={{ background: 'rgba(0, 0, 0, 0.02)' }}
+                  >
                     {ev.banner_url ? (
-                      <img src={`http://localhost:5000${ev.banner_url}`} alt="" className="w-full h-full object-cover" />
+                      <img
+                        src={`${baseUrl}${ev.banner_url}`}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="font-display text-3xl text-muted">{ev.title.slice(0,2).toUpperCase()}</span>
+                      <div className="w-full h-full flex items-center justify-center bg-white/5">
+                        <span className="font-display text-2xl" style={{ color: 'var(--brand)' }}>
+                          {ev.title.slice(0, 2).toUpperCase()}
+                        </span>
                       </div>
                     )}
-                    {/* Status badge */}
-                    <div className={`absolute top-2 left-2 text-xs font-bold px-1.5 py-0.5 rounded ${ev.status === 'active' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                      {ev.status === 'active' ? '●' : '✕'}
+                    <div className={`absolute top-2 left-2 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md ${
+                      ev.status === 'active' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+                    }`}>
+                      {ev.status === 'active' ? 'ACTIF' : 'ANNULÉ'}
                     </div>
                   </div>
 
-                  <div className="flex-1 p-4 flex flex-col md:flex-row md:items-center gap-3 min-w-0">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-primary text-sm md:text-base truncate">{ev.title}</h3>
-                      <p className="text-secondary text-xs mt-0.5">
-                        {new Date(ev.date).toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short', year:'numeric' })}
-                        {ev.location && ` · ${ev.location}`}
+                  <div className="flex-1 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 min-w-0">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <h3 className="font-bold text-base md:text-lg truncate" style={{ color: 'var(--text-primary)' }}>
+                        {ev.title}
+                      </h3>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        📅 {new Date(ev.date).toLocaleDateString('fr-FR', { weekday:'short', day:'numeric', month:'short' })}
+                        {ev.location && ` · 📍 ${ev.location}`}
                       </p>
-                      <div className="flex flex-wrap gap-3 mt-2 text-xs">
-                        <span className="text-secondary">🎟 {ev.tickets_sold || 0}/{ev.total_tickets} vendus</span>
-                        <span className="text-emerald-500">✅ {ev.tickets_scanned || 0} scannés</span>
-                        <span className="text-amber-500">💰 {parseInt(ev.revenue || 0).toLocaleString()} FCFA</span>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1 text-xs">
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          🎟 <b style={{ color: 'var(--text-primary)' }}>{ev.tickets_sold || 0}</b>/{ev.total_tickets}
+                        </span>
+                        <span style={{ color: 'var(--success)' }}>
+                          ✅ {ev.tickets_scanned || 0} scannés
+                        </span>
+                        <span className="font-mono" style={{ color: 'var(--brand)' }}>
+                          {parseInt(ev.revenue || 0).toLocaleString()} FCFA
+                        </span>
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                      <button onClick={() => loadAttendees(ev.id)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all text-secondary hover:text-primary"
-                        style={{ background: 'var(--input-bg)' }}>
-                        <Eye size={12} /> Participants
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap md:justify-end w-full md:w-auto pt-2 md:pt-0 border-t border-[var(--border)] md:border-t-0">
+                      <button
+                        onClick={() => loadAttendees(ev.id)}
+                        className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-2 rounded-lg text-xs font-bold transition-all"
+                        style={{
+                          color: 'var(--text-secondary)',
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border)'
+                        }}
+                      >
+                        <Eye size={13} /> <span className="md:hidden lg:inline">Participants</span>
                       </button>
-                      <button onClick={() => navigate(`/admin/edit-event/${ev.id}`)}
-                        className="flex items-center gap-1.5 bg-accent-500/10 hover:bg-accent-500/20 text-accent-500 px-3 py-2 rounded-lg text-xs font-bold transition-all">
-                        <Pencil size={12} /> Modifier
+                      <button
+                        onClick={() => navigate(`/admin/edit-event/${ev.id}`)}
+                        className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-2 rounded-lg text-xs font-bold transition-all"
+                        style={{
+                          color: 'var(--brand)',
+                          background: 'rgba(229, 9, 20, 0.1)',
+                          border: '1px solid rgba(229, 9, 20, 0.2)'
+                        }}
+                      >
+                        <Pencil size={13} /> Modifier
                       </button>
-                      <button onClick={() => handleDelete(ev.id, ev.title)} disabled={deletingId === ev.id}
-                        className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 px-3 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50">
-                        <Trash2 size={12} /> {deletingId === ev.id ? '...' : 'Supprimer'}
+                      <button
+                        onClick={() => handleDelete(ev.id, ev.title)}
+                        disabled={deletingId === ev.id}
+                        className="flex items-center justify-center gap-1.5 flex-1 sm:flex-none px-3 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+                        style={{
+                          color: 'var(--brand)',
+                          background: 'rgba(229, 9, 20, 0.1)',
+                          border: '1px solid rgba(229, 9, 20, 0.2)'
+                        }}
+                      >
+                        <Trash2 size={13} /> {deletingId === ev.id ? '...' : 'Supprimer'}
                       </button>
                     </div>
                   </div>
@@ -252,72 +414,126 @@ export default function Admin() {
           </div>
         )}
 
-        {/* ── ATTENDEES ──────────────────────────────────────────────────────── */}
+        {/* ATTENDEES */}
         {activeTab === 'attendees' && (
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <h3 className="font-bold text-primary text-lg">Liste des participants</h3>
+          <div className="card p-4 sm:p-5">
+            <div className="flex flex-col space-y-4 mb-5">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>Liste des participants</h3>
+                  {attendees.length > 0 && (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {attendees.length} participant(s) enregistré(s)
+                    </p>
+                  )}
+                </div>
                 {attendees.length > 0 && (
-                  <p className="text-secondary text-xs mt-0.5">{attendees.length} participant(s)</p>
+                  <button
+                    onClick={exportCSV}
+                    className="flex items-center gap-1.5 text-xs font-bold transition-all px-3 py-1.5 rounded-lg"
+                    style={{
+                      color: 'var(--brand)',
+                      background: 'rgba(229, 9, 20, 0.1)',
+                      border: '1px solid rgba(229, 9, 20, 0.2)'
+                    }}
+                  >
+                    <Download size={12} /> <span className="hidden sm:inline">Exporter</span> CSV
+                  </button>
                 )}
               </div>
-              <div className="flex gap-3 flex-wrap">
+
+              <div className="flex gap-2 flex-wrap max-h-24 overflow-y-auto pr-1 pb-1">
                 {events.map(ev => (
-                  <button key={ev.id} onClick={() => loadAttendees(ev.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeEvent === ev.id ? 'btn-primary text-white' : 'text-secondary hover:text-primary'}`}
-                    style={{ background: activeEvent === ev.id ? '' : 'var(--input-bg)' }}>
-                    {ev.title.length > 20 ? `${ev.title.slice(0, 20)}...` : ev.title}
+                  <button
+                    key={ev.id}
+                    onClick={() => loadAttendees(ev.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all truncate max-w-[160px] sm:max-w-[200px] ${
+                      activeEvent === ev.id ? 'btn-primary text-white' : 'text-[var(--text-secondary)] hover:text-[var(--brand)]'
+                    }`}
+                    style={{ background: activeEvent === ev.id ? '' : 'var(--bg-elevated)' }}
+                  >
+                    {ev.title}
                   </button>
                 ))}
-                {attendees.length > 0 && (
-                  <button onClick={exportCSV} className="flex items-center gap-1.5 text-accent-500 text-xs font-bold hover:text-accent-600 transition-colors px-3 py-1.5 rounded-lg bg-accent-500/10">
-                    <Download size={12} /> CSV
-                  </button>
-                )}
               </div>
             </div>
 
             {!activeEvent ? (
-              <p className="text-muted text-sm py-8 text-center">Sélectionnez un événement ci-dessus.</p>
+              <p className="text-sm py-10 text-center" style={{ color: 'var(--text-muted)' }}>
+                Sélectionnez un événement pour afficher sa liste de présence.
+              </p>
             ) : attendees.length === 0 ? (
-              <p className="text-muted text-sm py-8 text-center">Aucun participant pour cet événement.</p>
+              <p className="text-sm py-10 text-center" style={{ color: 'var(--text-muted)' }}>
+                Aucun participant inscrit pour cet événement.
+              </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[700px]">
+              <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+                <table className="w-full text-sm min-w-[750px]">
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }} className="text-secondary text-xs uppercase tracking-wider">
-                      <th className="text-left pb-3 pr-4">Nom</th>
-                      <th className="text-left pb-3 pr-4">Téléphone</th>
-                      <th className="text-left pb-3 pr-4">Catégorie</th>
-                      <th className="text-left pb-3 pr-4">Ticket</th>
-                      <th className="text-left pb-3 pr-4">Paiement</th>
-                      <th className="text-left pb-3">Date</th>
+                    <tr
+                      style={{ borderBottom: '1px solid var(--border)' }}
+                      className="text-xs uppercase tracking-wider"
+                    >
+                      <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Nom</th>
+                      <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Téléphone</th>
+                      <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Catégorie</th>
+                      <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Ticket</th>
+                      <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Paiement</th>
+                      <th className="text-left pb-3" style={{ color: 'var(--text-muted)' }}>Date</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-[var(--border)]">
                     {attendees.map((a, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }} className="hover:bg-neutral-500/5 transition-colors">
-                        <td className="py-2.5 pr-4 font-semibold text-primary text-xs">{a.holder_name}</td>
-                        <td className="py-2.5 pr-4 text-secondary text-xs font-mono">{a.holder_phone || '—'}</td>
-                        <td className="py-2.5 pr-4">
-                          <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                            style={{ background: (a.color || '#3B82F6') + '25', color: a.color || '#3B82F6' }}>
+                      <tr key={i} className="hover:bg-[var(--bg-elevated)] transition-colors">
+                        <td className="py-3 pr-4 font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>
+                          {a.holder_name}
+                        </td>
+                        <td className="py-3 pr-4 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+                          {a.holder_phone || '—'}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span
+                            className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: (a.color || '#E50914') + '20',
+                              color: a.color || '#E50914'
+                            }}
+                          >
                             {a.category_name}
                           </span>
                         </td>
-                        <td className="py-2.5 pr-4">
-                          <span className={`text-xs font-bold flex items-center gap-1 ${a.status === 'active' ? 'text-emerald-500' : a.status === 'used' ? 'text-accent-500' : 'text-amber-500'}`}>
-                            {a.status === 'active' ? <CheckCircle size={10} /> : a.status === 'used' ? <ScanLine size={10} /> : <Clock size={10} />}
+                        <td className="py-3 pr-4">
+                          <span className={`text-[11px] font-bold flex items-center gap-1 ${
+                            a.status === 'active'
+                              ? 'text-emerald-500'
+                              : a.status === 'used'
+                              ? 'text-blue-500'
+                              : 'text-amber-500'
+                          }`}>
+                            {a.status === 'active' ? (
+                              <CheckCircle size={11} />
+                            ) : a.status === 'used' ? (
+                              <ScanLine size={11} />
+                            ) : (
+                              <Clock size={11} />
+                            )}
                             {a.status}
                           </span>
                         </td>
-                        <td className="py-2.5 pr-4">
-                          <span className={`text-xs font-bold ${a.payment_status === 'success' ? 'text-emerald-500' : a.payment_status === 'pending' ? 'text-amber-500' : 'text-muted'}`}>
+                        <td className="py-3 pr-4">
+                          <span className={`text-[11px] font-bold uppercase ${
+                            a.payment_status === 'success'
+                              ? 'text-emerald-500'
+                              : a.payment_status === 'pending'
+                              ? 'text-amber-500'
+                              : 'text-[var(--text-muted)]'
+                          }`}>
                             {a.payment_status || '—'}
                           </span>
                         </td>
-                        <td className="py-2.5 text-secondary text-xs">{new Date(a.created_at).toLocaleDateString('fr-FR')}</td>
+                        <td className="py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {new Date(a.created_at).toLocaleDateString('fr-FR')}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -326,6 +542,157 @@ export default function Admin() {
             )}
           </div>
         )}
+
+        {/* VALIDATIONS */}
+        {activeTab === 'pending' && (
+          <div className="card p-5">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
+                Paiements en attente de validation
+              </h3>
+              {pendingTickets.length > 0 && (
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {pendingTickets.length} paiement(s) en attente
+                </span>
+              )}
+            </div>
+
+            {pendingTickets.length === 0 ? (
+              <div className="text-center py-12" style={{ color: 'var(--text-muted)' }}>
+                <CheckCircle size={40} className="mx-auto mb-3 opacity-20" style={{ color: 'var(--brand)' }} />
+                <p className="text-sm">Aucun paiement en attente de validation.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingTickets.map((ticket, index) => (
+                  <motion.div
+                    key={ticket.tx_ref || index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[var(--bg-elevated)] rounded-lg border border-[var(--border)] gap-4"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-1">
+                        <div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center"
+                          style={{ background: 'rgba(229, 9, 20, 0.1)' }}
+                        >
+                          <Ticket size={18} style={{ color: 'var(--brand)' }} />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>
+                            {ticket.holder_name}
+                          </p>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {ticket.event_title} · {ticket.category_name}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <span>💰 {parseInt(ticket.amount || 0).toLocaleString()} FCFA</span>
+                        <span>📱 {ticket.holder_phone}</span>
+                        <span className="font-mono">🆔 {ticket.tx_ref}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => openConfirmModal(ticket.tx_ref)} // ✅ Ouvre la modale au lieu de window.confirm
+                        className="btn-primary flex items-center gap-2 py-2 px-4 text-xs sm:text-sm"
+                      >
+                        <Check size={14} /> Valider
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODALE DE CONFIRMATION - NOUVELLE SECTION */}
+        <AnimatePresence>
+          {showConfirmModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowConfirmModal(false)} // Ferme en cliquant à l'extérieur
+            >
+              {/* Conteneur de la modale */}
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-6 border border-[var(--border)] shadow-2xl"
+                onClick={(e) => e.stopPropagation()} // Empêche la fermeture en cliquant sur la modale
+              >
+                {/* En-tête de la modale */}
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
+                      Confirmer la validation
+                    </h3>
+                    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Êtes-vous sûr de vouloir valider ce paiement ?
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-elevated)]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Contenu de la modale (optionnel : afficher les détails du ticket) */}
+                {selectedTxRef && pendingTickets.find(t => t.tx_ref === selectedTxRef) && (
+                  <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
+                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>
+                      Détails du paiement
+                    </p>
+                    <div className="space-y-1 text-sm">
+                      <p style={{ color: 'var(--text-primary)' }}>
+                        <strong>Participant :</strong> {pendingTickets.find(t => t.tx_ref === selectedTxRef).holder_name}
+                      </p>
+                      <p style={{ color: 'var(--text-secondary)' }}>
+                        <strong>Montant :</strong> {parseInt(pendingTickets.find(t => t.tx_ref === selectedTxRef).amount || 0).toLocaleString()} FCFA
+                      </p>
+                      <p style={{ color: 'var(--text-secondary)' }}>
+                        <strong>Référence :</strong> {selectedTxRef}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Boutons d'action */}
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                    style={{
+                      color: 'var(--text-secondary)',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)'
+                    }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleValidate}
+                    className="btn-primary px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
+                  >
+                    <Check size={14} /> Confirmer
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

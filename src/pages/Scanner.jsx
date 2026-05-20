@@ -4,16 +4,18 @@ import { CheckCircle, XCircle, AlertCircle, Camera, RefreshCw, ScanLine, Shield,
 import toast from 'react-hot-toast';
 import { verifyTicket } from '../services/api';
 
-// Configuration des résultats de scan
+// Chargement dynamique de ZXing pour éviter les conflits
+let BrowserQRCodeReader;
+
 const RESULT_CONFIG = {
-  VALID:   {
+  VALID: {
     bg: 'rgba(16, 185, 129, 0.12)',
     border: '#10B981',
     text: '#10B981',
     icon: CheckCircle,
     label: 'VALIDE'
   },
-  USED:    {
+  USED: {
     bg: 'rgba(192, 57, 43, 0.12)',
     border: '#C0392B',
     text: '#C0392B',
@@ -37,73 +39,67 @@ export default function Scanner() {
   const [verifying, setVerifying] = useState(false);
   const [scanCount, setScanCount] = useState(0);
   const [camError, setCamError] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0); // Clé pour forcer le rechargement
 
   // Références
   const scannerRef = useRef(null);
   const verifyingRef = useRef(false);
   const cooldownRef = useRef(false);
   const mountedRef = useRef(true);
-  const html5QrCodeRef = useRef(null);
+  const codeReaderRef = useRef(null);
+  const videoRef = useRef(null);
 
   // Initialisation et nettoyage
   useEffect(() => {
     mountedRef.current = true;
 
+    // Charger ZXing dynamiquement
+    const loadZXing = async () => {
+      try {
+        const { BrowserQRCodeReader: QRCodeReader } = await import('@zxing/library');
+        BrowserQRCodeReader = QRCodeReader;
+        codeReaderRef.current = new QRCodeReader();
+      } catch (err) {
+        console.error("Échec du chargement de ZXing:", err);
+        if (mountedRef.current) setCamError("Erreur : bibliothèque de scan introuvable.");
+      }
+    };
+
+    loadZXing();
+
     return () => {
       mountedRef.current = false;
-      _forceStop();
+      _forceStop(); // Nettoyer avant le démontage
     };
   }, []);
 
-  // Charger la bibliothèque html5-qrcode via un script externe
-  useEffect(() => {
-    const loadHtml5Qrcode = () => {
-      // Vérifier si la bibliothèque est déjà chargée
-      if (window.Html5Qrcode) {
-        html5QrCodeRef.current = window.Html5Qrcode;
-        return;
-      }
-
-      // Créer un script pour charger la bibliothèque depuis un CDN
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
-      script.async = true;
-      script.onload = () => {
-        if (window.Html5Qrcode) {
-          html5QrCodeRef.current = window.Html5Qrcode;
-        } else {
-          console.error("La bibliothèque html5-qrcode n'a pas été chargée correctement.");
-          setCamError("Erreur : bibliothèque de scan introuvable. Veuillez rafraîchir la page.");
-        }
-      };
-      script.onerror = () => {
-        console.error("Échec du chargement du script html5-qrcode.");
-        setCamError("Erreur : échec du chargement de la bibliothèque de scan.");
-      };
-      document.body.appendChild(script);
-
-      return () => {
-        document.body.removeChild(script);
-      };
-    };
-
-    loadHtml5Qrcode();
-  }, []);
-
-  // Arrêter le scanner
+  // Nettoyage complet du scanner et de la caméra
   const _forceStop = async () => {
+    // Arrêter le scanner ZXing
     if (scannerRef.current) {
       try {
-        const state = scannerRef.current.getState?.();
-        if (state === 2 || state === 3) {
-          await scannerRef.current.stop();
-        }
-        scannerRef.current.clear();
+        await scannerRef.current?.reset?.();
       } catch (e) {
         console.error("Erreur lors de l'arrêt du scanner:", e);
       }
       scannerRef.current = null;
     }
+
+    // Libérer la caméra
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => {
+        try {
+          track.stop();
+          track.enabled = false;
+        } catch (e) {
+          console.error("Erreur lors de l'arrêt de la track:", e);
+        }
+      });
+      videoRef.current.srcObject = null;
+    }
+
+    // Réinitialiser toutes les références
+    codeReaderRef.current = null;
     if (mountedRef.current) setScanning(false);
   };
 
@@ -113,7 +109,7 @@ export default function Scanner() {
 
     cooldownRef.current = true;
     verifyingRef.current = true;
-    if (mountedRef.current) setVerifying(true);
+    setVerifying(true);
 
     await _forceStop();
 
@@ -132,26 +128,23 @@ export default function Scanner() {
             border: `1px solid ${r === 'VALID' ? '#10B981' : '#C0392B'}`,
             color: 'var(--text-primary)',
           },
+          duration: 2000,
         });
       }
     } catch (err) {
       const msg = err.response?.data?.error || err.message || 'Erreur de vérification';
       if (mountedRef.current) {
         setResult({ type: 'INVALID', message: msg, ticket: null });
-        toast.error(msg);
+        toast.error(msg, { duration: 2000 });
       }
     } finally {
       verifyingRef.current = false;
       if (mountedRef.current) setVerifying(false);
-      setTimeout(() => { cooldownRef.current = false; }, 2500);
+      setTimeout(() => { cooldownRef.current = false; }, 1000);
     }
   };
 
-  const onScanSuccessRef = useRef((qrData) => {
-    handleScanSuccess(qrData);
-  });
-
-  // Démarrer le scanner
+  // Démarrer le scanner avec ZXing
   const startScanner = async () => {
     setCamError(null);
     setResult(null);
@@ -159,7 +152,7 @@ export default function Scanner() {
     verifyingRef.current = false;
 
     await _forceStop();
-    await new Promise(r => setTimeout(r, 150));
+    setReloadKey(prev => prev + 1); // Force le rechargement du conteneur
 
     const container = document.getElementById(SCANNER_ID);
     if (!container) {
@@ -167,40 +160,66 @@ export default function Scanner() {
       return;
     }
 
-    if (!html5QrCodeRef.current) {
-      setCamError("Bibliothèque de scan non chargée. Veuillez rafraîchir la page.");
-      return;
-    }
-
     try {
-      const Html5QrcodeClass = html5QrCodeRef.current;
+      // Créer un élément vidéo pour la caméra
+      const videoElement = document.createElement('video');
+      videoElement.id = 'qr-video';
+      videoElement.style.width = '100%';
+      videoElement.style.height = '100%';
+      videoElement.style.objectFit = 'cover';
+      videoElement.playsInline = true;
+      videoElement.muted = true;
+      videoElement.autoplay = true;
 
-      // Ne pas spécifier formatsToSupport pour éviter les erreurs
-      const html5Qr = new Html5QrcodeClass(SCANNER_ID, {
-        verbose: false,
-        qrbox: (w, h) => {
-          const size = Math.min(w, h) * 0.7;
-          return { width: size, height: size };
+      // Ajouter la vidéo au conteneur
+      container.innerHTML = '';
+      container.appendChild(videoElement);
+      videoRef.current = videoElement;
+
+      // Démarrer la caméra
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 640 },
+          height: { ideal: 480 },
         },
-        aspectRatio: 1.0,
-        // On ne spécifie pas formatsToSupport pour éviter l'erreur QR_CODE
+        audio: false,
       });
 
-      scannerRef.current = html5Qr;
+      videoElement.srcObject = stream;
+
+      // Attendre que la vidéo soit prête
+      await new Promise((resolve) => {
+        videoElement.onloadedmetadata = () => {
+          videoElement.play().then(resolve).catch(resolve);
+        };
+      });
+
+      // Démarrer la détection avec ZXing
+      const codeReader = codeReaderRef.current;
+      if (!codeReader) {
+        throw new Error("Bibliothèque ZXing non chargée");
+      }
+
+      scannerRef.current = codeReader;
+
+      await codeReader.decodeFromVideoDevice(
+        undefined,
+        videoElement,
+        (result, error) => {
+          if (result) {
+            handleScanSuccess(result.getText());
+          }
+          if (error && error.name !== 'NotFoundException') {
+            console.warn("Erreur de scan:", error);
+          }
+        }
+      );
 
       setScanning(true);
 
-      await html5Qr.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-        },
-        onScanSuccessRef.current,
-        () => { /* Échecs d'analyse de frames */ }
-      );
     } catch (err) {
       console.error('[Scanner] Erreur de démarrage:', err);
-      scannerRef.current = null;
       if (mountedRef.current) {
         setScanning(false);
         const msg = err?.message || String(err);
@@ -215,8 +234,15 @@ export default function Scanner() {
     }
   };
 
-  const stopScanner = async () => { await _forceStop(); };
-  const reset = () => { setResult(null); setCamError(null); };
+  const stopScanner = async () => {
+    await _forceStop();
+  };
+
+  const reset = () => {
+    setResult(null);
+    setCamError(null);
+    cooldownRef.current = false;
+  };
 
   const cfg = result ? RESULT_CONFIG[result.type] : null;
 
@@ -245,6 +271,7 @@ export default function Scanner() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
               className="mb-4 text-center"
             >
               <span
@@ -268,30 +295,37 @@ export default function Scanner() {
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.2 }}
             >
+              {/* Conteneur du scanner avec une clé unique pour forcer le rechargement */}
               <div
                 className="rounded-2xl overflow-hidden mb-4 relative"
                 style={{
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border)',
-                  minHeight: scanning ? '340px' : 'auto'
+                  height: '280px',
+                  width: '100%',
                 }}
               >
-                <div id={SCANNER_ID} style={{ width: '100%' }} />
+                <div
+                  key={reloadKey} // ✅ Force le rechargement du conteneur
+                  id={SCANNER_ID}
+                  style={{ width: '100%', height: '100%' }}
+                />
 
                 {/* État initial (caméra non démarrée) */}
                 {!scanning && !camError && (
-                  <div className="p-10 flex flex-col items-center gap-4">
+                  <div className="absolute inset-0 p-6 flex flex-col items-center justify-center gap-4">
                     <motion.div
                       animate={{ scale: [1, 1.05, 1] }}
-                      transition={{ duration: 2.5, repeat: Infinity }}
-                      className="w-24 h-24 rounded-2xl flex items-center justify-center"
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center"
                       style={{
                         background: 'var(--input-bg)',
                         border: '2px dashed var(--border-strong)'
                       }}
                     >
-                      <Camera size={36} style={{ color: 'var(--text-muted)' }} />
+                      <Camera size={28} style={{ color: 'var(--text-muted)' }} />
                     </motion.div>
                     <p
                       className="text-sm text-center leading-relaxed"
@@ -304,8 +338,8 @@ export default function Scanner() {
 
                 {/* Erreur caméra */}
                 {camError && (
-                  <div className="p-6 flex flex-col items-center gap-3 text-center">
-                    <XCircle size={40} style={{ color: '#C0392B' }} />
+                  <div className="absolute inset-0 p-6 flex flex-col items-center justify-center gap-3 text-center">
+                    <XCircle size={32} style={{ color: '#C0392B' }} />
                     <p className="text-sm font-semibold" style={{ color: '#C0392B' }}>
                       {camError}
                     </p>
@@ -318,24 +352,24 @@ export default function Scanner() {
                 {/* Scanner actif */}
                 {scanning && !verifying && (
                   <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 10 }}>
-                    {['top-6 left-6 border-t-[3px] border-l-[3px] rounded-tl-xl',
-                      'top-6 right-6 border-t-[3px] border-r-[3px] rounded-tr-xl',
-                      'bottom-6 left-6 border-b-[3px] border-l-[3px] rounded-bl-xl',
-                      'bottom-6 right-6 border-b-[3px] border-r-[3px] rounded-br-xl',
+                    {['top-4 left-4 border-t-[2px] border-l-[2px] rounded-tl-xl',
+                      'top-4 right-4 border-t-[2px] border-r-[2px] rounded-tr-xl',
+                      'bottom-4 left-4 border-b-[2px] border-l-[2px] rounded-bl-xl',
+                      'bottom-4 right-4 border-b-[2px] border-r-[2px] rounded-br-xl',
                     ].map((cls, i) => (
                       <div
                         key={i}
-                        className={`absolute w-8 h-8 ${cls}`}
+                        className={`absolute w-6 h-6 ${cls}`}
                         style={{ borderColor: 'var(--brand)' }}
                       />
                     ))}
                     <motion.div
-                      animate={{ top: ['18%', '82%', '18%'] }}
-                      transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }}
+                      animate={{ top: ['15%', '85%', '15%'] }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
                       style={{
                         position: 'absolute',
-                        left: '14%',
-                        right: '14%',
+                        left: '10%',
+                        right: '10%',
                         height: '2px',
                         background: 'linear-gradient(90deg, transparent, var(--brand), transparent)',
                         boxShadow: '0 0 14px var(--brand)',
@@ -350,7 +384,7 @@ export default function Scanner() {
                           backdropFilter: 'blur(4px)'
                         }}
                       >
-                        Alignez le QR code dans le cadre
+                        Alignez le QR code
                       </span>
                     </div>
                   </div>
@@ -368,12 +402,13 @@ export default function Scanner() {
                   >
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                      style={{ display: 'flex' }}
                     >
-                      <ScanLine size={44} style={{ color: 'var(--accent)' }} />
+                      <ScanLine size={36} style={{ color: 'var(--accent)' }} />
                     </motion.div>
                     <p className="font-bold text-sm text-white tracking-wide">
-                      Vérification sur le serveur…
+                      Vérification...
                     </p>
                   </div>
                 )}
@@ -383,15 +418,15 @@ export default function Scanner() {
               {scanning ? (
                 <button
                   onClick={stopScanner}
-                  className="btn-secondary w-full flex items-center justify-center gap-2 py-3.5"
+                  className="btn-secondary w-full flex items-center justify-center gap-2 py-3"
                 >
-                  <X size={16} /> Fermer l'accès caméra
+                  <X size={16} /> Fermer la caméra
                 </button>
               ) : (
                 <button
                   onClick={startScanner}
                   disabled={verifying}
-                  className="btn-primary w-full flex items-center justify-center gap-2 py-3.5 text-base shadow-lg"
+                  className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base shadow-lg"
                 >
                   <Camera size={18} /> Démarrer le scanner
                 </button>
@@ -402,8 +437,8 @@ export default function Scanner() {
                 className="mt-4 p-3 rounded-xl text-xs text-center space-y-1"
                 style={{ background: 'var(--bg-elevated)', color: 'var(--text-muted)' }}
               >
-                <p>💡 Connexion sécurisée requise (<strong>HTTPS</strong> ou <strong>localhost</strong>)</p>
-                <p>📱 Autorisez l'accès caméra si demandé</p>
+                <p>💡 Connexion HTTPS requise</p>
+                <p>📱 Autorisez l'accès à la caméra</p>
               </div>
             </motion.div>
           ) : (
@@ -414,7 +449,7 @@ export default function Scanner() {
                 initial={{ opacity: 0, scale: 0.88 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+                transition={{ duration: 0.2 }}
               >
                 <div
                   className="rounded-2xl p-6 mb-4 text-center"
@@ -423,14 +458,14 @@ export default function Scanner() {
                   <motion.div
                     initial={{ scale: 0, rotate: -25 }}
                     animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: 'spring', stiffness: 320, delay: 0.1 }}
+                    transition={{ type: 'spring', stiffness: 400, delay: 0.05 }}
                     className="mb-4"
                   >
-                    <cfg.icon size={80} style={{ color: cfg.text, margin: '0 auto' }} />
+                    <cfg.icon size={60} style={{ color: cfg.text, margin: '0 auto' }} />
                   </motion.div>
 
                   <h2
-                    className="font-display text-4xl tracking-widest mb-2"
+                    className="font-display text-3xl tracking-widest mb-2"
                     style={{ color: cfg.text }}
                   >
                     {cfg.label}
@@ -447,7 +482,7 @@ export default function Scanner() {
                     <motion.div
                       initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.25 }}
+                      transition={{ delay: 0.1, duration: 0.2 }}
                       className="rounded-xl p-4 text-left space-y-3"
                       style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
                     >
@@ -460,7 +495,7 @@ export default function Scanner() {
                             Participant
                           </p>
                           <p
-                            className="font-bold text-lg"
+                            className="font-bold text-base"
                             style={{ color: 'var(--text-primary)' }}
                           >
                             {result.ticket.holder_name}
@@ -540,9 +575,9 @@ export default function Scanner() {
 
                 <button
                   onClick={reset}
-                  className="btn-secondary w-full flex items-center justify-center gap-2 py-3.5"
+                  className="btn-secondary w-full flex items-center justify-center gap-2 py-3"
                 >
-                  <RefreshCw size={16} /> Suivant (Billet Suivant)
+                  <RefreshCw size={16} /> Suivant
                 </button>
               </motion.div>
             )

@@ -4,126 +4,195 @@
 
 /* ── VARIABLES DE THÈME ───────────────────────────────────────────────────── */
 :root {
-  /* Dark theme (défaut) */
-  --bg-base:      #050C18;
-  --bg-surface:   #0D1B2E;
-  --bg-card:      #142338;
-  --bg-elevated:  #1C3050;
-  --border:       rgba(255,255,255,0.08);
-  --border-strong: rgba(255,255,255,0.15);
-  --text-primary: #F0F4FF;
-  --text-secondary: rgba(240,244,255,0.55);
-  --text-muted:   rgba(240,244,255,0.28);
-  --brand:        #C0392B;
-  --brand-hover:  #A93226;
-  --accent:       #3B82F6;
-  --accent-hover: #2563EB;
-  --success:      #10B981;
-  --warning:      #F59E0B;
-  --input-bg:     rgba(255,255,255,0.06);
-  --scrollbar:    rgba(255,255,255,0.12);
-  --shadow:       0 4px 24px rgba(0,0,0,0.4);
+  --bg-base:      #000000;
+  --bg-surface:   #121212;
+  --bg-card:      #1A1A1A;
+  --bg-elevated:  #252525;
+
+  --border:       rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted:   rgba(255, 255, 255, 0.4);
+
+  --brand:        #E50914;
+  --brand-hover:  #B81D1D;
+  --accent:       #FFFFFF;
+  --accent-hover: #F0F0F0;
+
+  --success:      #4CAF50;
+  --warning:      #FFC107;
+  --error:        #F44336;
+  --input-bg:     rgba(255, 255, 255, 0.05);
+  --scrollbar:    rgba(229, 9, 20, 0.5);
+  --shadow:       0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-/* Light theme */
 .light {
-  --bg-base:      #F0F4FF;
-  --bg-surface:   #FFFFFF;
+  --bg-base:      #FFFFFF;
+  --bg-surface:   #F8F8F8;
   --bg-card:      #FFFFFF;
-  --bg-elevated:  #E8EEFF;
-  --border:       rgba(0,0,50,0.08);
-  --border-strong: rgba(0,0,50,0.18);
-  --text-primary: #0D1B2E;
-  --text-secondary: rgba(13,27,46,0.60);
-  --text-muted:   rgba(13,27,46,0.35);
-  --brand:        #C0392B;
-  --brand-hover:  #A93226;
-  --accent:       #2563EB;
-  --accent-hover: #1D4ED8;
-  --success:      #059669;
-  --warning:      #D97706;
-  --input-bg:     rgba(0,0,50,0.05);
-  --scrollbar:    rgba(0,0,50,0.12);
-  --shadow:       0 4px 24px rgba(0,0,50,0.10);
+  --bg-elevated:  #F0F0F0;
+
+  --border:       rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
+
+  --text-primary: #000000;
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --text-muted:   rgba(0, 0, 0, 0.3);
+
+  --brand:        #E50914;
+  --brand-hover:  #B81D1D;
+  --accent:       #000000;
+  --accent-hover: #333333;
+
+  --success:      #4CAF50;
+  --warning:      #FFC107;
+  --error:        #F44336;
+  --input-bg:     rgba(0, 0, 0, 0.05);
+  --scrollbar:    rgba(229, 9, 20, 0.3);
+  --shadow:       0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 /* ── BASE ─────────────────────────────────────────────────────────────────── */
 @layer base {
-  * { box-sizing: border-box; }
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
 
-  html { transition: background-color 0.25s ease, color 0.25s ease; }
+  html {
+    min-height: 100%;
+    scroll-behavior: smooth;
+  }
 
   body {
-    @apply font-body;
+    margin: 0;
+    min-height: 100%;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     background-color: var(--bg-base);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     transition: background-color 0.25s ease, color 0.25s ease;
+    @apply font-body;
   }
 
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 5px; }
-  ::-webkit-scrollbar-track { background: var(--bg-surface); }
-  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 999px; }
+  img, picture, video, canvas, svg {
+    display: block;
+    max-width: 100%;
+  }
 
-  /* Selection */
-  ::selection { background: var(--accent); color: #fff; }
+  button, input, textarea, select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: var(--brand);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg-surface);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 999px;
+  }
+}
+
+.page-shell {
+  min-height: calc(100vh - 4rem);
+  padding-top: 4rem;
+  padding-bottom: 5rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
 }
 
 /* ── COMPONENTS ───────────────────────────────────────────────────────────── */
 @layer components {
-
+  /* Bouton principal (rouge) */
   .btn-primary {
-    @apply font-bold px-6 py-3 rounded-xl transition-all duration-200 active:scale-95
+    @apply font-bold px-6 py-3 rounded-lg transition-all duration-200 active:scale-95
            disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center;
     background: var(--brand);
     color: #fff;
+    border: none;
   }
-  .btn-primary:hover:not(:disabled) { background: var(--brand-hover); }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--brand-hover);
+  }
 
+  /* Bouton secondaire (transparent avec bordure rouge) */
   .btn-secondary {
-    @apply font-bold px-6 py-3 rounded-xl transition-all duration-200 active:scale-95
+    @apply font-bold px-6 py-3 rounded-lg transition-all duration-200 active:scale-95
            inline-flex items-center justify-center;
-    background: var(--bg-elevated);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--brand);
+    border: 2px solid var(--brand);
   }
-  .btn-secondary:hover { border-color: var(--border-strong); }
+  .btn-secondary:hover {
+    background: var(--brand);
+    color: #fff;
+  }
 
+  /* Bouton fantôme (transparent) */
   .btn-ghost {
     @apply font-semibold px-4 py-2 rounded-lg transition-all duration-200 active:scale-95
            inline-flex items-center justify-center;
     color: var(--text-secondary);
     background: transparent;
+    border: 1px solid transparent;
   }
-  .btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); }
+  .btn-ghost:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
 
+  /* Cartes */
   .card {
-    @apply rounded-2xl transition-colors duration-200;
+    @apply rounded-2xl transition-all duration-200;
     background: var(--bg-card);
     border: 1px solid var(--border);
     box-shadow: var(--shadow);
+    overflow: hidden;
   }
-  .card-hover:hover { border-color: var(--border-strong); }
+  .card-hover:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  }
 
+  /* Champ de saisie */
   .input-field {
-    @apply w-full rounded-xl px-4 py-3 font-body outline-none transition-all duration-200;
+    @apply w-full rounded-lg px-4 py-3 font-body outline-none transition-all duration-200;
     background: var(--input-bg);
     color: var(--text-primary);
     border: 1px solid var(--border);
     font-size: 14px;
   }
   .input-field::placeholder { color: var(--text-muted); }
-  .input-field:focus { border-color: var(--accent); }
+  .input-field:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.2);
+  }
 
+  /* Badge (étiquette) */
   .badge {
     @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold;
+    background: rgba(229, 9, 20, 0.2);
+    color: var(--brand);
   }
 
   /* Navbar */
   .navbar {
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
   }
 
   /* Surface utilitaire */
@@ -133,10 +202,29 @@
   /* Séparateur */
   .divider { border-color: var(--border); }
 
-  /* Text helpers */
-  .text-primary   { color: var(--text-primary); }
+  /* Aides pour le texte */
+  .text-primary { color: var(--text-primary); }
   .text-secondary { color: var(--text-secondary); }
-  .text-muted     { color: var(--text-muted); }
+  .text-muted { color: var(--text-muted); }
+
+  /* Lien style Tikerama (rouge) */
+  .link-brand {
+    color: var(--brand);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .link-brand:hover {
+    color: var(--brand-hover);
+  }
+}
+
+/* ── UTILITAIRES ───────────────────────────────────────────────────────────── */
+@layer utilities {
+  .bg-brand { background-color: var(--brand); }
+  .text-brand { color: var(--brand); }
+  .border-brand { border-color: var(--brand); }
+  .hoverbg-brand-hover:hover { background-color: var(--brand-hover); }
+  .hovertext-brand-hover:hover { color: var(--brand-hover); }
 }
 
 /* ── PWA — Splash / Safe areas ────────────────────────────────────────────── */
@@ -145,7 +233,6 @@
   .navbar { padding-top: env(safe-area-inset-top); }
 }
 
-/* Standalone mode (app installée) */
 @media (display-mode: standalone) {
   .navbar { padding-top: max(env(safe-area-inset-top), 12px); }
 }
