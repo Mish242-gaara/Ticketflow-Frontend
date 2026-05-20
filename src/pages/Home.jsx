@@ -203,7 +203,7 @@ export default function Home() {
         </div>
         <div className="border-t mt-8 pt-8 text-center text-sm" style={{ borderColor: 'var(--border)' }}>
             <p style={{ color: 'var(--text-muted)' }}>
-              © {new Date().getFullYear()} TicketFlow — ESTAM BDE · Pointe-Noire, Congo
+              © {new Date().getFullYear()} TicketFlow — Elmish Segara · Pointe-Noire, Congo
             </p>
         </div>
       </motion.footer>
