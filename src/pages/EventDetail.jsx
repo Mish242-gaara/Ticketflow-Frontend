@@ -15,14 +15,14 @@ const WHATSAPP_ADMIN_PHONE = "242064149149"; // Format international sans le "+"
 export default function EventDetail() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const [event, setEvent]           = useState(null);
-  const [loading, setLoading]       = useState(true);
+  const [event, setEvent] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selectedCat, setSelectedCat] = useState(null);
-  const [showForm, setShowForm]     = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [waitingPayment, setWaitingPayment] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState(null);
-  const [momoRef, setMomoRef] = useState(''); // 🆕 Stocke la référence saisie par l'utilisateur
+  const [momoRef, setMomoRef] = useState('');
   const [form, setForm] = useState({
     holder_name: '', holder_phone: '', holder_email: '', payment_method: 'mtn',
   });
@@ -56,8 +56,7 @@ export default function EventDetail() {
         return;
       }
 
-      // Option 3 : Paiement requis — basculer sur l'écran d'instructions manuelles
-      setPaymentInfo(payment || ticket); 
+      setPaymentInfo(payment || ticket);
       setWaitingPayment(true);
       toast.success('📱 Réservation enregistrée ! Suivez les instructions pour payer.');
     } catch (err) {
@@ -67,7 +66,6 @@ export default function EventDetail() {
     }
   };
 
-  // 🆕 Génère le message et redirige l'utilisateur vers WhatsApp pour t'avertir
   const handleSendWhatsAppNotification = () => {
     const txRef = paymentInfo?.txRef || 'Non spécifiée';
     const price = parseInt(selectedCat.price).toLocaleString();
@@ -83,12 +81,9 @@ export default function EventDetail() {
                     `Merci de valider mon ticket !`;
 
     const whatsappUrl = `https://wa.me/${WHATSAPP_ADMIN_PHONE}?text=${encodeURIComponent(message)}`;
-    
-    // Ouvrir WhatsApp dans un nouvel onglet
     window.open(whatsappUrl, '_blank');
     toast.success('💬 Notification WhatsApp ouverte !');
-    
-    // Fermer la modale et rediriger l'utilisateur vers son espace de suivi
+
     setShowForm(false);
     setSelectedCat(null);
     setWaitingPayment(false);
@@ -105,11 +100,12 @@ export default function EventDetail() {
 
   if (loading) return (
     <div className="min-h-screen pt-24 flex items-center justify-center">
-      <Loader2 size={40} className="animate-spin text-brand-500" />
+      <Loader2 size={40} className="animate-spin" style={{ color: 'var(--brand)' }} />
     </div>
   );
+
   if (!event) return (
-    <div className="min-h-screen pt-24 flex items-center justify-center text-white/50">
+    <div className="min-h-screen pt-24 flex items-center justify-center" style={{ color: 'var(--text-muted)' }}>
       Événement introuvable.
     </div>
   );
@@ -118,7 +114,7 @@ export default function EventDetail() {
   const validCategories = (event.categories || []).filter(c => c && c.id);
 
   return (
-    <div className="min-h-screen pt-20 pb-20">
+    <div className="min-h-screen pt-20 pb-20" style={{ backgroundColor: 'var(--bg-base)' }}>
       {/* Banner hero */}
       <div className="relative h-64 md:h-96 overflow-hidden">
         {event.banner_url ? (
@@ -127,13 +123,13 @@ export default function EventDetail() {
         ) : (
           <div className="w-full h-full flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #1C3050 0%, #0D1B2E 100%)' }}>
-            <span className="font-display text-9xl tracking-widest text-white/5">
+            <span className="font-display text-9xl tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
               {event.title.slice(0, 2).toUpperCase()}
             </span>
           </div>
         )}
         <div className="absolute inset-0"
-          style={{ background: 'linear-gradient(to top, #0D1B2E 0%, rgba(13,27,46,0.5) 50%, transparent 100%)' }} />
+          style={{ background: 'linear-gradient(to top, var(--bg-base) 0%, rgba(13,27,46,0.5) 50%, transparent 100%)' }} />
         <div className="absolute bottom-6 left-6 right-6">
           <span className="bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full tracking-wider mb-3 inline-block">
             {event.organizer}
@@ -156,10 +152,10 @@ export default function EventDetail() {
               { icon: Users,    label: 'Places restantes', value: `${event.available_tickets}` },
             ].map((d, i) => (
               <div key={i}>
-                <div className="flex items-center gap-1.5 text-white/40 text-xs mb-1">
+                <div className="flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                   <d.icon size={11} /> {d.label}
                 </div>
-                <p className="text-white font-semibold text-sm leading-snug">{d.value}</p>
+                <p className="font-semibold text-sm leading-snug" style={{ color: 'var(--text-primary)' }}>{d.value}</p>
               </div>
             ))}
           </div>
@@ -167,8 +163,8 @@ export default function EventDetail() {
           {/* Description */}
           {(event.long_description || event.description) && (
             <div className="card p-6">
-              <h2 className="font-bold text-white text-lg mb-3">À propos</h2>
-              <p className="text-white/60 leading-relaxed text-sm">
+              <h2 className="font-bold text-lg mb-3" style={{ color: 'var(--text-primary)' }}>À propos</h2>
+              <p className="leading-relaxed text-sm" style={{ color: 'var(--text-secondary)' }}>
                 {event.long_description || event.description}
               </p>
             </div>
@@ -177,10 +173,10 @@ export default function EventDetail() {
 
         {/* Ticket selector */}
         <div className="space-y-4">
-          <h2 className="font-display text-2xl tracking-wide text-white">CHOISIR UN TICKET</h2>
+          <h2 className="font-display text-2xl tracking-wide" style={{ color: 'var(--text-primary)' }}>CHOISIR UN TICKET</h2>
 
           {validCategories.length === 0 ? (
-            <div className="card p-6 text-center text-white/40 text-sm">
+            <div className="card p-6 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
               Aucune catégorie disponible.
             </div>
           ) : (
@@ -192,22 +188,24 @@ export default function EventDetail() {
                   onClick={() => { if (!isFull) { setSelectedCat(cat); setShowForm(true); } }}
                   disabled={isFull}
                   className={`w-full card p-4 text-left transition-all ${
-                    !isFull ? 'hover:border-white/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
+                    !isFull ? 'hover:border-brand/20 cursor-pointer' : 'opacity-40 cursor-not-allowed'
                   }`}
-                  style={{ border: selectedCat?.id === cat.id ? `2px solid ${cat.color}` : '2px solid transparent' }}
+                  style={{
+                    border: selectedCat?.id === cat.id ? `2px solid ${cat.color}` : '2px solid transparent'
+                  }}
                 >
                   <div className="flex items-start justify-between mb-1.5">
-                    <span className="font-bold text-white text-sm">{cat.name}</span>
+                    <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
                     <span className="font-display text-lg leading-none" style={{ color: cat.color }}>
                       {isFree ? 'GRATUIT' : `${parseInt(cat.price).toLocaleString()} F`}
                     </span>
                   </div>
                   {cat.description && (
-                    <p className="text-white/40 text-xs mb-2 leading-relaxed">{cat.description}</p>
+                    <p className="text-xs mb-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{cat.description}</p>
                   )}
-                  <div className="flex items-center justify-between text-xs text-white/30">
+                  <div className="flex items-center justify-between text-xs" style={{ color: 'var(--text-muted)' }}>
                     <span>{isFull ? '⛔ Complet' : `${cat.available_quantity} place${cat.available_quantity > 1 ? 's' : ''} restante${cat.available_quantity > 1 ? 's' : ''}`}</span>
-                    {!isFull && <ChevronRight size={14} />}
+                    {!isFull && <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
                   </div>
                 </button>
               );
@@ -216,13 +214,13 @@ export default function EventDetail() {
         </div>
       </div>
 
-      {/* ── CHECKOUT MODAL ─────────────────────────────────────────────── */}
+      {/* MODAL DE RÉSERVATION */}
       <AnimatePresence>
         {showForm && selectedCat && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)' }}
+            style={{ background: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(6px)' }}
             onClick={(e) => e.target === e.currentTarget && closeModal()}
           >
             <motion.div
@@ -231,20 +229,23 @@ export default function EventDetail() {
             >
               {/* Header */}
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-white text-lg">
+                <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
                   {waitingPayment ? 'Instructions de Paiement' : `Réserver — ${selectedCat.name}`}
                 </h3>
-                <button onClick={closeModal} className="text-white/40 hover:text-white transition-colors">
+                <button onClick={closeModal} className="transition-colors" style={{ color: 'var(--text-muted)' }}>
                   <X size={20} />
                 </button>
               </div>
 
               {/* Summary */}
               <div className="rounded-xl p-3 flex justify-between items-center"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)'
+                }}>
                 <div>
-                  <p className="text-white/60 text-xs">{event.title}</p>
-                  <p className="text-white font-semibold text-sm mt-0.5">{selectedCat.name}</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{event.title}</p>
+                  <p className="font-semibold text-sm mt-0.5" style={{ color: 'var(--text-primary)' }}>{selectedCat.name}</p>
                 </div>
                 <span className="font-display text-xl" style={{ color: selectedCat.color }}>
                   {parseFloat(selectedCat.price) === 0 ? 'GRATUIT' : `${parseInt(selectedCat.price).toLocaleString()} FCFA`}
@@ -252,40 +253,53 @@ export default function EventDetail() {
               </div>
 
               {waitingPayment ? (
-                /* 🆕 OPTION 3 : INTERFACE D'INSTRUCTIONS ET VALIDATION MANUELLE */
+                /* INTERFACE D'INSTRUCTIONS ET VALIDATION MANUELLE */
                 <div className="space-y-4 py-2">
-                  <div className="rounded-xl p-4 space-y-3 bg-neutral-900 border border-neutral-800 text-sm">
-                    <p className="text-white/90 font-medium">
+                  <div className="rounded-xl p-4 space-y-3" style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)'
+                  }}>
+                    <p className="font-medium" style={{ color: 'var(--text-primary)' }}>
                       Pour activer votre ticket, effectuez le transfert manuel suivant :
                     </p>
-                    <div className="p-3 rounded-lg bg-black/40 border border-white/5 space-y-1">
-                      <p className="text-white/50 text-xs">Montant exact à envoyer :</p>
-                      <p className="text-xl font-bold text-brand-400">{parseInt(selectedCat.price).toLocaleString()} FCFA</p>
-                      <p className="text-white/50 text-xs pt-1">Vers le numéro de l'organisateur :</p>
-                      <p className="text-base font-mono font-bold text-white">
+                    <div className="p-3 rounded-lg" style={{
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border)'
+                    }}>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Montant exact à envoyer :</p>
+                      <p className="text-xl font-bold" style={{ color: 'var(--brand)' }}>
+                        {parseInt(selectedCat.price).toLocaleString()} FCFA
+                      </p>
+                      <p className="text-xs pt-1" style={{ color: 'var(--text-muted)' }}>Vers le numéro de l'organisateur :</p>
+                      <p className="text-base font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
                         {form.payment_method === 'mtn' ? `🟡 MTN : ${MOMO_NUMBER_MTN}` : `🔴 Airtel : ${MOMO_NUMBER_AIRTEL}`}
                       </p>
                     </div>
-                    <p className="text-xs text-white/50 leading-relaxed">
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
                       💡 Une fois le transfert Mobile Money complété, copiez la référence de la transaction reçue par SMS ci-dessous, puis cliquez sur le bouton vert pour m'envoyer la demande de validation.
                     </p>
                   </div>
 
                   {/* Saisie Référence MoMo */}
                   <div>
-                    <label className="text-xs text-white/50 font-bold uppercase tracking-wider mb-1.5 block">
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
                       Id / Référence de la transaction MoMo (Optionnel)
                     </label>
-                    <input 
-                      className="input-field font-mono" 
+                    <input
+                      className="input-field font-mono"
                       placeholder="Ex: MP260519.1102.A00123"
-                      value={momoRef} 
-                      onChange={e => setMomoRef(e.target.value)} 
+                      value={momoRef}
+                      onChange={e => setMomoRef(e.target.value)}
+                      style={{
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-primary)'
+                      }}
                     />
                   </div>
 
                   {/* Bouton de soumission WhatsApp */}
-                  <button 
+                  <button
                     onClick={handleSendWhatsAppNotification}
                     className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
                   >
@@ -297,24 +311,53 @@ export default function EventDetail() {
                 /* Formulaire de saisie classique (Étape 1) */
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs text-white/50 font-bold uppercase tracking-wider mb-1.5 block">Nom complet *</label>
-                    <input className="input-field" placeholder="Jean-Paul Mbemba"
-                      value={form.holder_name} onChange={e => setForm(f => ({ ...f, holder_name: e.target.value }))} />
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Nom complet *</label>
+                    <input
+                      className="input-field"
+                      placeholder="Jean-Paul Mbemba"
+                      value={form.holder_name}
+                      onChange={e => setForm(f => ({ ...f, holder_name: e.target.value }))}
+                      style={{
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-primary)'
+                      }}
+                    />
                   </div>
                   <div>
-                    <label className="text-xs text-white/50 font-bold uppercase tracking-wider mb-1.5 block">Téléphone *</label>
-                    <input className="input-field" placeholder="+242 06 XXX XX XX" type="tel"
-                      value={form.holder_phone} onChange={e => setForm(f => ({ ...f, holder_phone: e.target.value }))} />
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Téléphone *</label>
+                    <input
+                      className="input-field"
+                      placeholder="+242 06 XXX XX XX"
+                      type="tel"
+                      value={form.holder_phone}
+                      onChange={e => setForm(f => ({ ...f, holder_phone: e.target.value }))}
+                      style={{
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-primary)'
+                      }}
+                    />
                   </div>
                   <div>
-                    <label className="text-xs text-white/50 font-bold uppercase tracking-wider mb-1.5 block">Email (optionnel)</label>
-                    <input className="input-field" placeholder="email@exemple.com" type="email"
-                      value={form.holder_email} onChange={e => setForm(f => ({ ...f, holder_email: e.target.value }))} />
+                    <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>Email (optionnel)</label>
+                    <input
+                      className="input-field"
+                      placeholder="email@exemple.com"
+                      type="email"
+                      value={form.holder_email}
+                      onChange={e => setForm(f => ({ ...f, holder_email: e.target.value }))}
+                      style={{
+                        background: 'var(--input-bg)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-primary)'
+                      }}
+                    />
                   </div>
 
                   {parseFloat(selectedCat.price) > 0 && (
                     <div>
-                      <label className="text-xs text-white/50 font-bold uppercase tracking-wider mb-1.5 block">
+                      <label className="text-xs font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
                         Méthode de paiement
                       </label>
                       <div className="grid grid-cols-2 gap-2">
@@ -322,14 +365,17 @@ export default function EventDetail() {
                           { id: 'mtn',    label: '🟡 MTN MoMo' },
                           { id: 'airtel', label: '🔴 Airtel Money' },
                         ].map(m => (
-                          <button key={m.id} type="button"
+                          <button
+                            key={m.id}
+                            type="button"
                             onClick={() => setForm(f => ({ ...f, payment_method: m.id }))}
                             className="py-2.5 rounded-xl text-sm font-bold transition-all"
                             style={{
-                              border: form.payment_method === m.id ? '2px solid #3B82F6' : '2px solid rgba(255,255,255,0.08)',
-                              background: form.payment_method === m.id ? 'rgba(59,130,246,0.1)' : 'transparent',
-                              color: form.payment_method === m.id ? '#fff' : 'rgba(255,255,255,0.4)',
-                            }}>
+                              border: form.payment_method === m.id ? `2px solid ${m.id === 'mtn' ? '#FFD700' : '#E50914'}` : '2px solid var(--border)',
+                              background: form.payment_method === m.id ? `rgba(${m.id === 'mtn' ? '255, 215, 0' : '229, 9, 20'}, 0.1)` : 'transparent',
+                              color: form.payment_method === m.id ? '#fff' : 'var(--text-secondary)',
+                            }}
+                          >
                             {m.label}
                           </button>
                         ))}
@@ -340,8 +386,11 @@ export default function EventDetail() {
               )}
 
               {!waitingPayment && (
-                <button onClick={handleReserve} disabled={submitting}
-                  className="btn-primary w-full flex items-center justify-center gap-2">
+                <button
+                  onClick={handleReserve}
+                  disabled={submitting}
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                >
                   {submitting && <Loader2 size={16} className="animate-spin" />}
                   {submitting
                     ? 'Traitement...'
