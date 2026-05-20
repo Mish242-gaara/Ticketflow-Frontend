@@ -3,10 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, AlertCircle, Camera, RefreshCw, ScanLine, Shield, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { verifyTicket } from '../services/api';
+import { BrowserQRCodeReader } from '@zxing/library';
 
-// Chargement dynamique de ZXing pour éviter les conflits
-let BrowserQRCodeReader;
-
+// Configuration des résultats de scan
 const RESULT_CONFIG = {
   VALID: {
     bg: 'rgba(16, 185, 129, 0.12)',
@@ -39,7 +38,6 @@ export default function Scanner() {
   const [verifying, setVerifying] = useState(false);
   const [scanCount, setScanCount] = useState(0);
   const [camError, setCamError] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0); // Clé pour forcer le rechargement
 
   // Références
   const scannerRef = useRef(null);
@@ -49,57 +47,31 @@ export default function Scanner() {
   const codeReaderRef = useRef(null);
   const videoRef = useRef(null);
 
-  // Initialisation et nettoyage
+  // Initialisation
   useEffect(() => {
     mountedRef.current = true;
-
-    // Charger ZXing dynamiquement
-    const loadZXing = async () => {
-      try {
-        const { BrowserQRCodeReader: QRCodeReader } = await import('@zxing/library');
-        BrowserQRCodeReader = QRCodeReader;
-        codeReaderRef.current = new QRCodeReader();
-      } catch (err) {
-        console.error("Échec du chargement de ZXing:", err);
-        if (mountedRef.current) setCamError("Erreur : bibliothèque de scan introuvable.");
-      }
-    };
-
-    loadZXing();
+    codeReaderRef.current = new BrowserQRCodeReader();
 
     return () => {
       mountedRef.current = false;
-      _forceStop(); // Nettoyer avant le démontage
+      _forceStop();
     };
   }, []);
 
-  // Nettoyage complet du scanner et de la caméra
+  // Arrêter le scanner
   const _forceStop = async () => {
-    // Arrêter le scanner ZXing
     if (scannerRef.current) {
       try {
-        await scannerRef.current?.reset?.();
+        await scannerRef.current.reset();
       } catch (e) {
         console.error("Erreur lors de l'arrêt du scanner:", e);
       }
       scannerRef.current = null;
     }
-
-    // Libérer la caméra
     if (videoRef.current?.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => {
-        try {
-          track.stop();
-          track.enabled = false;
-        } catch (e) {
-          console.error("Erreur lors de l'arrêt de la track:", e);
-        }
-      });
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
-
-    // Réinitialiser toutes les références
-    codeReaderRef.current = null;
     if (mountedRef.current) setScanning(false);
   };
 
@@ -152,7 +124,6 @@ export default function Scanner() {
     verifyingRef.current = false;
 
     await _forceStop();
-    setReloadKey(prev => prev + 1); // Force le rechargement du conteneur
 
     const container = document.getElementById(SCANNER_ID);
     if (!container) {
@@ -167,7 +138,7 @@ export default function Scanner() {
       videoElement.style.width = '100%';
       videoElement.style.height = '100%';
       videoElement.style.objectFit = 'cover';
-      videoElement.playsInline = true;
+      videoElement.playsInline = true; // Important pour iOS
       videoElement.muted = true;
       videoElement.autoplay = true;
 
@@ -179,9 +150,9 @@ export default function Scanner() {
       // Démarrer la caméra
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'environment',
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          facingMode: 'environment', // Caméra arrière
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       });
@@ -197,14 +168,11 @@ export default function Scanner() {
 
       // Démarrer la détection avec ZXing
       const codeReader = codeReaderRef.current;
-      if (!codeReader) {
-        throw new Error("Bibliothèque ZXing non chargée");
-      }
-
       scannerRef.current = codeReader;
 
+      // Configuration du scanner
       await codeReader.decodeFromVideoDevice(
-        undefined,
+        undefined, // Utilise la caméra par défaut
         videoElement,
         (result, error) => {
           if (result) {
@@ -235,7 +203,19 @@ export default function Scanner() {
   };
 
   const stopScanner = async () => {
-    await _forceStop();
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.reset();
+      } catch (e) {
+        console.error("Erreur lors de l'arrêt du scanner:", e);
+      }
+      scannerRef.current = null;
+    }
+    if (videoRef.current?.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    if (mountedRef.current) setScanning(false);
   };
 
   const reset = () => {
@@ -245,6 +225,9 @@ export default function Scanner() {
   };
 
   const cfg = result ? RESULT_CONFIG[result.type] : null;
+
+  // Taille réduite du conteneur de la caméra (250px au lieu de 340px)
+  const scannerHeight = '250px';
 
   return (
     <div className="min-h-screen pt-20 pb-20 px-4" style={{ background: 'var(--bg-base)' }}>
@@ -297,25 +280,19 @@ export default function Scanner() {
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ duration: 0.2 }}
             >
-              {/* Conteneur du scanner avec une clé unique pour forcer le rechargement */}
               <div
                 className="rounded-2xl overflow-hidden mb-4 relative"
                 style={{
                   background: 'var(--bg-surface)',
                   border: '1px solid var(--border)',
-                  height: '280px',
-                  width: '100%',
+                  minHeight: scanning ? scannerHeight : 'auto' // Hauteur réduite
                 }}
               >
-                <div
-                  key={reloadKey} // ✅ Force le rechargement du conteneur
-                  id={SCANNER_ID}
-                  style={{ width: '100%', height: '100%' }}
-                />
+                <div id={SCANNER_ID} style={{ width: '100%', height: scannerHeight }} />
 
                 {/* État initial (caméra non démarrée) */}
                 {!scanning && !camError && (
-                  <div className="absolute inset-0 p-6 flex flex-col items-center justify-center gap-4">
+                  <div className="p-6 flex flex-col items-center gap-4" style={{ height: scannerHeight }}>
                     <motion.div
                       animate={{ scale: [1, 1.05, 1] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
@@ -338,7 +315,7 @@ export default function Scanner() {
 
                 {/* Erreur caméra */}
                 {camError && (
-                  <div className="absolute inset-0 p-6 flex flex-col items-center justify-center gap-3 text-center">
+                  <div className="p-6 flex flex-col items-center gap-3 text-center" style={{ height: scannerHeight }}>
                     <XCircle size={32} style={{ color: '#C0392B' }} />
                     <p className="text-sm font-semibold" style={{ color: '#C0392B' }}>
                       {camError}
@@ -364,7 +341,7 @@ export default function Scanner() {
                       />
                     ))}
                     <motion.div
-                      animate={{ top: ['15%', '85%', '15%'] }}
+                      animate={{ top: ['10%', '90%', '10%'] }} // Ajusté pour la nouvelle hauteur
                       transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
                       style={{
                         position: 'absolute',
@@ -375,9 +352,9 @@ export default function Scanner() {
                         boxShadow: '0 0 14px var(--brand)',
                       }}
                     />
-                    <div className="absolute bottom-3 left-0 right-0 text-center">
+                    <div className="absolute bottom-2 left-0 right-0 text-center">
                       <span
-                        className="text-xs font-bold px-3 py-1 rounded-full"
+                        className="text-xs font-bold px-2 py-1 rounded-full"
                         style={{
                           background: 'rgba(0, 0, 0, 0.6)',
                           color: 'rgba(255, 255, 255, 0.9)',
@@ -527,7 +504,7 @@ export default function Scanner() {
                             Catégorie
                           </p>
                           <span
-                            className="text-xs font-bold px-2.5 py-1 rounded-full inline-block"
+                            className="text-xs font-bold px-2 py-1 rounded-full inline-block"
                             style={{
                               background: (result.ticket.color || '#3B82F6') + '28',
                               color: result.ticket.color || '#3B82F6'
