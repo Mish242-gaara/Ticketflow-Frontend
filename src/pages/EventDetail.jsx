@@ -5,14 +5,15 @@ import { Calendar, MapPin, Clock, Users, ChevronRight, X, Loader2, MessageSquare
 import toast from 'react-hot-toast';
 import { getEvent, reserveTicket } from '../services/api';
 
-const API_URL = 'http://localhost:5000';
+// URL de base pour les images (identique à EventCard)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // ⚠️ MODIFIE CES NUMÉROS AVEC TES VRAIS NUMÉROS DE RÉCEPTION MOMO / AIRTEL / WHATSAPP
 const MOMO_NUMBER_MTN = "+242 06 414 91 49";
 const MOMO_NUMBER_AIRTEL = "+242 05 509 58 63";
 const WHATSAPP_ADMIN_PHONE = "242064149149"; // Format international sans le "+" pour l'URL WhatsApp
 
-// Image de secours pour la bannière
+// Image de secours (identique à EventCard)
 const FALLBACK_BANNER_URL = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.0.3";
 
 export default function EventDetail() {
@@ -32,16 +33,30 @@ export default function EventDetail() {
     holder_email: '',
     payment_method: 'mtn',
   });
+  const [imageError, setImageError] = useState(false); // ✅ État pour gérer les erreurs de chargement de la bannière
 
   useEffect(() => {
     getEvent(slug)
       .then((r) => {
-        console.log("Données de l'événement :", r.data.event); // ✅ Pour déboguer
+        console.log("Données de l'événement :", r.data.event);
         setEvent(r.data.event);
       })
       .catch(() => toast.error('Événement introuvable'))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  // ✅ Fonction identique à EventCard pour construire l'URL de l'image
+  const getImageUrl = () => {
+    if (!event?.banner_url) return null;
+
+    if (event.banner_url.startsWith('http://') || event.banner_url.startsWith('https://')) {
+      return event.banner_url;
+    }
+
+    return `${API_URL.replace(/\/$/, '')}/${event.banner_url.replace(/^\//, '')}`;
+  };
+
+  const bannerUrl = getImageUrl();
 
   const handleReserve = async () => {
     if (!form.holder_name.trim()) return toast.error('Nom requis');
@@ -127,49 +142,38 @@ export default function EventDetail() {
   const date = new Date(event.date);
   const validCategories = (event.categories || []).filter((c) => c && c.id);
 
-  // ✅ Fonction pour obtenir l'URL de la bannière
-  const getBannerUrl = () => {
-    if (!event.banner_url) return null;
-    // Si l'URL est déjà absolue (commence par http:// ou https://)
-    if (event.banner_url.startsWith('http://') || event.banner_url.startsWith('https://')) {
-      return event.banner_url;
-    }
-    // Sinon, préfixe avec API_URL
-    return `${API_URL}${event.banner_url.startsWith('/') ? '' : '/'}${event.banner_url}`;
-  };
-
-  const bannerUrl = getBannerUrl();
-
   return (
     <div className="min-h-screen pt-20 pb-20" style={{ backgroundColor: 'var(--bg-base)' }}>
-      {/* Banner hero */}
+      {/* Banner hero - Utilise la même logique que EventCard */}
       <div className="relative h-64 md:h-96 overflow-hidden">
-        {bannerUrl ? (
-          <img
-            src={bannerUrl}
-            alt={event.title}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              e.target.onerror = null; // Évite les boucles infinies
-              e.target.src = FALLBACK_BANNER_URL;
-            }}
-          />
+        {/* ✅ Utilisation de bannerUrl et gestion d'erreur identique à EventCard */}
+        {bannerUrl && !imageError ? (
+          <>
+            <img
+              src={bannerUrl}
+              alt={event.title}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
+            {/* Dégradé pour ombrager le bas de la bannière */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'linear-gradient(to top, var(--bg-base) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 100%)' }}
+            />
+          </>
         ) : (
+          // Fallback si pas d'image ou erreur de chargement (identique à EventCard)
           <div
             className="w-full h-full flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #1C3050 0%, #0D1B2E 100%)' }}
           >
             <span className="font-display text-9xl tracking-widest" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
-              {event.title.slice(0, 2).toUpperCase()}
+              {event.title ? event.title.slice(0, 2).toUpperCase() : 'EV'}
             </span>
           </div>
         )}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: 'linear-gradient(to top, var(--bg-base) 0%, rgba(13, 27, 46, 0.5) 50%, transparent 100%)',
-          }}
-        />
+
+        {/* Contenu superposé sur la bannière */}
         <div className="absolute bottom-6 left-6 right-6">
           <span
             className="bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full tracking-wider mb-3 inline-block"
@@ -191,12 +195,16 @@ export default function EventDetail() {
               {
                 icon: Calendar,
                 label: 'Date',
-                value: date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }),
+                value: !isNaN(date.getTime())
+                  ? date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
+                  : 'Date non définie',
               },
               {
                 icon: Clock,
                 label: 'Heure',
-                value: date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                value: !isNaN(date.getTime())
+                  ? date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                  : 'Heure non définie',
               },
               { icon: MapPin, label: 'Lieu', value: event.location || '—' },
               {
