@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import {
   Ticket, Users, DollarSign, ScanLine, Plus, Download,
-  Pencil, Trash2, Eye, CheckCircle, Clock, Check, X
+  Pencil, Trash2, Eye, CheckCircle, Clock, Check, X, Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { getAdminStats, getAttendees } from '../services/api';
@@ -16,12 +16,20 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeEvent, setActiveEvent] = useState(null);
   const [attendees, setAttendees] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterPayment, setFilterPayment] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [pendingTickets, setPendingTickets] = useState([]);
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // État pour la modale de confirmation
-  const [selectedTxRef, setSelectedTxRef] = useState(null); // Stocke le txRef à valider
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showHardDeleteModal, setShowHardDeleteModal] = useState(false);
+  const [selectedTxRef, setSelectedTxRef] = useState(null);
+  const [attendeeToDelete, setAttendeeToDelete] = useState(null);
+  const [isValidating, setIsValidating] = useState(false);
   const navigate = useNavigate();
 
+  // ✅ Fonction asynchrone pour charger les données
   const loadData = async () => {
     try {
       const [statsRes, eventsRes, pendingRes] = await Promise.all([
@@ -32,47 +40,98 @@ export default function Admin() {
       setStats(statsRes.data.stats);
       setEvents(eventsRes.data.events || []);
       setPendingTickets(pendingRes.data.tickets || []);
-    } catch {
-      toast.error('Erreur chargement');
+    } catch (error) {
+      console.error("Erreur chargement données:", error);
+      toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // Fonction pour ouvrir la modale de confirmation
+  // ✅ Fonction pour ouvrir la modale de validation
   const openConfirmModal = (txRef) => {
+    if (!txRef) {
+      toast.error('Référence de paiement manquante.');
+      return;
+    }
     setSelectedTxRef(txRef);
     setShowConfirmModal(true);
   };
 
-  // Fonction pour valider manuellement un paiement
+  // ✅ Fonction asynchrone pour valider un paiement
   const handleValidate = async () => {
-    if (!selectedTxRef) return;
+    if (!selectedTxRef) {
+      toast.error("Référence de paiement manquante. Impossible de valider.");
+      return;
+    }
+    setIsValidating(true);
     try {
       await api.post(`/admin/tickets/validate/${selectedTxRef}`, { action: 'approve' });
       toast.success("✅ Paiement validé avec succès !");
-      loadData();
+      await loadData();
+      setShowConfirmModal(false);
+      setSelectedTxRef(null);
     } catch (err) {
       toast.error(err.response?.data?.error || "Erreur lors de la validation");
     } finally {
-      setShowConfirmModal(false);
-      setSelectedTxRef(null);
+      setIsValidating(false);
     }
   };
 
+  // ✅ Fonction asynchrone pour charger les participants
   const loadAttendees = async (eventId) => {
     setActiveEvent(eventId);
     setActiveTab('attendees');
     try {
       const res = await getAttendees(eventId);
       setAttendees(res.data.attendees || []);
-    } catch {
-      toast.error('Erreur chargement participants');
+      setSearchTerm("");
+      setFilterCategory("");
+      setFilterStatus("");
+      setFilterPayment("");
+    } catch (error) {
+      console.error("Erreur chargement participants:", error);
+      toast.error('Erreur lors du chargement des participants');
     }
   };
 
+  // ✅ Fonction pour ouvrir la modale de suppression définitive
+  const openHardDeleteModal = (attendee) => {
+    setAttendeeToDelete(attendee);
+    setShowHardDeleteModal(true);
+  };
+
+  // ✅ Fonction asynchrone pour supprimer définitivement un participant
+  const handleHardDeleteAttendee = async () => {
+    if (!attendeeToDelete || !activeEvent) {
+      toast.error("Aucun participant sélectionné");
+      return;
+    }
+
+    try {
+      const response = await api.delete(`/events/${activeEvent}/attendees/${attendeeToDelete.ticket_id}/hard`);
+      if (response.data.success) {
+        toast.success(response.data.message);
+        setShowHardDeleteModal(false);
+        setAttendeeToDelete(null);
+        // Recharge les participants et les stats
+        const res = await getAttendees(activeEvent);
+        setAttendees(res.data.attendees || []);
+        await loadData(); // Rafraîchit le dashboard
+      } else {
+        toast.error(response.data.error || "Erreur lors de la suppression");
+      }
+    } catch (err) {
+      console.error("Erreur suppression participant:", err);
+      toast.error(err.response?.data?.error || "Erreur réseau");
+    }
+  };
+
+  // ✅ Fonction asynchrone pour supprimer un événement
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Supprimer "${title}" ? Cette action est irréversible.`)) return;
     setDeletingId(id);
@@ -81,9 +140,25 @@ export default function Admin() {
       toast.success('Événement supprimé');
       setEvents(evs => evs.filter(e => e.id !== id));
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Erreur suppression');
+      toast.error(err.response?.data?.error || 'Erreur lors de la suppression');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // ✅ Fonction asynchrone pour annuler un participant (Soft Delete)
+  const handleCancelAttendee = async (attendee) => {
+    if (!window.confirm(`Annuler le participant "${attendee.holder_name}" ? Sa place sera libérée.`)) return;
+    try {
+      const res = await api.delete(`/events/${activeEvent}/attendees/${attendee.ticket_id}`);
+      if (res.data.success) {
+        toast.success(res.data.message);
+        const updatedAttendees = await getAttendees(activeEvent);
+        setAttendees(updatedAttendees.data.attendees || []);
+        await loadData(); // Rafraîchit le dashboard
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Erreur");
     }
   };
 
@@ -104,7 +179,7 @@ export default function Admin() {
 
   if (loading) return (
     <div className="min-h-screen pt-24 flex items-center justify-center" style={{ backgroundColor: 'var(--bg-base)' }}>
-      <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: 'var(--brand)' }} />
+      <Loader2 size={32} className="animate-spin" style={{ color: 'var(--brand)' }} />
     </div>
   );
 
@@ -147,6 +222,10 @@ export default function Admin() {
   ];
 
   const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'http://localhost:5000';
+
+  const getSelectedTicket = () => {
+    return pendingTickets.find(t => t.tx_ref === selectedTxRef) || null;
+  };
 
   return (
     <div className="min-h-screen pt-20 pb-20 px-4 transition-colors duration-200" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
@@ -404,7 +483,7 @@ export default function Admin() {
                           border: '1px solid rgba(229, 9, 20, 0.2)'
                         }}
                       >
-                        <Trash2 size={13} /> {deletingId === ev.id ? '...' : 'Supprimer'}
+                        <Trash2 size={13} /> {deletingId === ev.id ? <Loader2 size={12} className="animate-spin" /> : 'Supprimer'}
                       </button>
                     </div>
                   </div>
@@ -418,6 +497,50 @@ export default function Admin() {
         {activeTab === 'attendees' && (
           <div className="card p-4 sm:p-5">
             <div className="flex flex-col space-y-4 mb-5">
+              {/* Barre de recherche et filtres */}
+              <div className="flex flex-col md:flex-row md:items-end gap-3 mb-2">
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, téléphone, email..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="input w-full md:w-64"
+                  style={{ border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                />
+                <select
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                  className="input"
+                  style={{ border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                >
+                  <option value="">Toutes catégories</option>
+                  {[...new Set(attendees.map(a => a.category_name))].filter(Boolean).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <select
+                  value={filterStatus}
+                  onChange={e => setFilterStatus(e.target.value)}
+                  className="input"
+                  style={{ border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                >
+                  <option value="">Tous statuts</option>
+                  <option value="active">Actif</option>
+                  <option value="used">Utilisé</option>
+                  <option value="pending">En attente</option>
+                </select>
+                <select
+                  value={filterPayment}
+                  onChange={e => setFilterPayment(e.target.value)}
+                  className="input"
+                  style={{ border: '1px solid var(--border)', background: 'var(--input-bg)', color: 'var(--text-primary)' }}
+                >
+                  <option value="">Tous paiements</option>
+                  <option value="success">Payé</option>
+                  <option value="pending">En attente</option>
+                  <option value="">Non renseigné</option>
+                </select>
+              </div>
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>Liste des participants</h3>
@@ -480,62 +603,94 @@ export default function Admin() {
                       <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Ticket</th>
                       <th className="text-left pb-3 pr-4" style={{ color: 'var(--text-muted)' }}>Paiement</th>
                       <th className="text-left pb-3" style={{ color: 'var(--text-muted)' }}>Date</th>
+                      <th className="text-left pb-3" style={{ color: 'var(--text-muted)' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border)]">
-                    {attendees.map((a, i) => (
-                      <tr key={i} className="hover:bg-[var(--bg-elevated)] transition-colors">
-                        <td className="py-3 pr-4 font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>
-                          {a.holder_name}
-                        </td>
-                        <td className="py-3 pr-4 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
-                          {a.holder_phone || '—'}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span
-                            className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-                            style={{
-                              background: (a.color || '#E50914') + '20',
-                              color: a.color || '#E50914'
-                            }}
-                          >
-                            {a.category_name}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className={`text-[11px] font-bold flex items-center gap-1 ${
-                            a.status === 'active'
-                              ? 'text-emerald-500'
-                              : a.status === 'used'
-                              ? 'text-blue-500'
-                              : 'text-amber-500'
-                          }`}>
-                            {a.status === 'active' ? (
-                              <CheckCircle size={11} />
-                            ) : a.status === 'used' ? (
-                              <ScanLine size={11} />
-                            ) : (
-                              <Clock size={11} />
-                            )}
-                            {a.status}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className={`text-[11px] font-bold uppercase ${
-                            a.payment_status === 'success'
-                              ? 'text-emerald-500'
-                              : a.payment_status === 'pending'
-                              ? 'text-amber-500'
-                              : 'text-[var(--text-muted)]'
-                          }`}>
-                            {a.payment_status || '—'}
-                          </span>
-                        </td>
-                        <td className="py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {new Date(a.created_at).toLocaleDateString('fr-FR')}
-                        </td>
-                      </tr>
-                    ))}
+                    {attendees
+                      .filter(a =>
+                        (!searchTerm ||
+                          a.holder_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          a.holder_phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          a.holder_email?.toLowerCase().includes(searchTerm.toLowerCase())
+                        ) &&
+                        (!filterCategory || a.category_name === filterCategory) &&
+                        (!filterStatus || a.status === filterStatus) &&
+                        (!filterPayment || a.payment_status === filterPayment)
+                      )
+                      .map((a, i) => (
+                        <tr key={a.ticket_id || i} className="hover:bg-[var(--bg-elevated)] transition-colors">
+                          <td className="py-3 pr-4 font-semibold text-xs" style={{ color: 'var(--text-primary)' }}>
+                            {a.holder_name}
+                          </td>
+                          <td className="py-3 pr-4 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
+                            {a.holder_phone || '—'}
+                          </td>
+                          <td className="py-3 pr-4">
+                            <span
+                              className="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                              style={{
+                                background: (a.color || '#E50914') + '20',
+                                color: a.color || '#E50914'
+                              }}
+                            >
+                              {a.category_name}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-4">
+                            <span className={`text-[11px] font-bold flex items-center gap-1 ${
+                              a.status === 'active'
+                                ? 'text-emerald-500'
+                                : a.status === 'used'
+                                ? 'text-blue-500'
+                                : 'text-amber-500'
+                            }`}>
+                              {a.status === 'active' ? (
+                                <CheckCircle size={11} />
+                              ) : a.status === 'used' ? (
+                                <ScanLine size={11} />
+                              ) : (
+                                <Clock size={11} />
+                              )}
+                              {a.status}
+                            </span>
+                          </td>
+                          <td className="py-3 pr-4">
+                            <span className={`text-[11px] font-bold uppercase ${
+                              a.payment_status === 'success'
+                                ? 'text-emerald-500'
+                                : a.payment_status === 'pending'
+                                ? 'text-amber-500'
+                                : 'text-[var(--text-muted)]'
+                            }`}>
+                              {a.payment_status || '—'}
+                            </span>
+                          </td>
+                          <td className="py-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                            {new Date(a.created_at).toLocaleDateString('fr-FR')}
+                          </td>
+                          {/* ✅ Boutons d'action */}
+                          <td className="py-3 text-xs">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleCancelAttendee(a)} // ✅ Utilise la nouvelle fonction asynchrone
+                                className="text-xs text-amber-600 hover:underline"
+                                title="Annuler le participant (libère la place)"
+                              >
+                                Annuler
+                              </button>
+                              <button
+                                onClick={() => a.status !== 'used' ? openHardDeleteModal(a) : toast.error("Impossible de supprimer un ticket déjà scanné.")}
+                                className={`text-xs font-bold ${a.status === 'used' ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:underline'}`}
+                                title={a.status === 'used' ? "Ticket déjà scanné" : "Supprimer définitivement"}
+                                disabled={a.status === 'used'}
+                              >
+                                 Supprimer
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -598,7 +753,7 @@ export default function Admin() {
 
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button
-                        onClick={() => openConfirmModal(ticket.tx_ref)} // ✅ Ouvre la modale au lieu de window.confirm
+                        onClick={() => openConfirmModal(ticket.tx_ref)}
                         className="btn-primary flex items-center gap-2 py-2 px-4 text-xs sm:text-sm"
                       >
                         <Check size={14} /> Valider
@@ -611,7 +766,7 @@ export default function Admin() {
           </div>
         )}
 
-        {/* MODALE DE CONFIRMATION - NOUVELLE SECTION */}
+        {/* MODALE DE CONFIRMATION POUR LA VALIDATION DES PAIEMENTS */}
         <AnimatePresence>
           {showConfirmModal && (
             <motion.div
@@ -619,18 +774,16 @@ export default function Admin() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-              onClick={() => setShowConfirmModal(false)} // Ferme en cliquant à l'extérieur
+              onClick={() => setShowConfirmModal(false)}
             >
-              {/* Conteneur de la modale */}
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                 className="w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-6 border border-[var(--border)] shadow-2xl"
-                onClick={(e) => e.stopPropagation()} // Empêche la fermeture en cliquant sur la modale
+                onClick={(e) => e.stopPropagation()}
               >
-                {/* En-tête de la modale */}
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
@@ -649,27 +802,28 @@ export default function Admin() {
                   </button>
                 </div>
 
-                {/* Contenu de la modale (optionnel : afficher les détails du ticket) */}
-                {selectedTxRef && pendingTickets.find(t => t.tx_ref === selectedTxRef) && (
-                  <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6">
+                {getSelectedTicket() && (
+                  <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6 border border-[var(--border)]">
                     <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>
                       Détails du paiement
                     </p>
                     <div className="space-y-1 text-sm">
                       <p style={{ color: 'var(--text-primary)' }}>
-                        <strong>Participant :</strong> {pendingTickets.find(t => t.tx_ref === selectedTxRef).holder_name}
+                        <strong>Participant :</strong> {getSelectedTicket().holder_name}
                       </p>
                       <p style={{ color: 'var(--text-secondary)' }}>
-                        <strong>Montant :</strong> {parseInt(pendingTickets.find(t => t.tx_ref === selectedTxRef).amount || 0).toLocaleString()} FCFA
+                        <strong>Événement :</strong> {getSelectedTicket().event_title}
                       </p>
                       <p style={{ color: 'var(--text-secondary)' }}>
+                        <strong>Montant :</strong> {parseInt(getSelectedTicket().amount || 0).toLocaleString()} FCFA
+                      </p>
+                      <p className="font-mono" style={{ color: 'var(--brand)' }}>
                         <strong>Référence :</strong> {selectedTxRef}
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* Boutons d'action */}
                 <div className="flex justify-end gap-3">
                   <button
                     onClick={() => setShowConfirmModal(false)}
@@ -684,9 +838,105 @@ export default function Admin() {
                   </button>
                   <button
                     onClick={handleValidate}
-                    className="btn-primary px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
+                    disabled={isValidating}
+                    className="btn-primary px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 disabled:opacity-70"
                   >
-                    <Check size={14} /> Confirmer
+                    {isValidating ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        Validation en cours...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={14} /> Confirmer
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* MODALE POUR LA SUPPRESSION DÉFINITIVE */}
+        <AnimatePresence>
+          {showHardDeleteModal && attendeeToDelete && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setShowHardDeleteModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                className="w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-6 border border-[var(--border)] shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg text-red-500">
+                      ⚠️ Suppression définitive
+                    </h3>
+                    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                      Cette action est <strong>irréversible</strong>. Le participant et son ticket seront supprimés définitivement de la base de données.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowHardDeleteModal(false)}
+                    className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-elevated)]"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="bg-[var(--bg-elevated)] rounded-lg p-4 mb-6 border border-[var(--border)]">
+                  <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>
+                    Détails du participant
+                  </p>
+                  <div className="space-y-1 text-sm">
+                    <p style={{ color: 'var(--text-primary)' }}>
+                      <strong>Nom :</strong> {attendeeToDelete.holder_name}
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                      <strong>Téléphone :</strong> {attendeeToDelete.holder_phone || '—'}
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                      <strong>Email :</strong> {attendeeToDelete.holder_email || '—'}
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                      <strong>Catégorie :</strong> {attendeeToDelete.category_name}
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                      <strong>Statut :</strong> {attendeeToDelete.status}
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                      <strong>Paiement :</strong> {attendeeToDelete.payment_status || '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setShowHardDeleteModal(false)}
+                    className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                    style={{
+                      color: 'var(--text-secondary)',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)'
+                    }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleHardDeleteAttendee}
+                    className="px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    <Trash2 size={14} /> Supprimer définitivement
                   </button>
                 </div>
               </motion.div>

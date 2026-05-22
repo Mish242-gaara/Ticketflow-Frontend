@@ -1,28 +1,39 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Users, Mail, Phone, MessageSquare, Send, X,
-  Loader2, Search, CheckSquare, Square, ArrowLeft, ExternalLink,
+  Users, Mail, Phone, MessageSquare, Send, X, Trash2, Clock, Ban, History,
+  Loader2, Search, CheckSquare, Square, ArrowLeft, ExternalLink, MoreVertical, Pencil, Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 
 export default function AdminUsers() {
-  const [users, setUsers]           = useState([]);
-  const [filtered, setFiltered]     = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [search, setSearch]         = useState('');
-  const [selected, setSelected]     = useState(new Set());
-  const [showModal, setShowModal]   = useState(false);
-  const [sending, setSending]       = useState(false);
-  const [channel, setChannel]       = useState('whatsapp');
-  const [announcement, setAnn]      = useState({ title: '', message: '' });
-  const [waLinks, setWaLinks]       = useState([]);
-  const [emailList, setEmailList]   = useState([]);
+  // États existants
+  const [users, setUsers] = useState([]);
+  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState(new Set());
+  const [showModal, setShowModal] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [channel, setChannel] = useState('whatsapp');
+  const [announcement, setAnn] = useState({ title: '', message: '' });
+  const [waLinks, setWaLinks] = useState([]);
+  const [emailList, setEmailList] = useState([]);
   const [showResults, setShowResults] = useState(false);
-  const [history, setHistory]       = useState([]);
+  const [history, setHistory] = useState([]);
 
+  // ✅ Nouveaux états pour les modales de suppression/blocage
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showDeleteHistoryModal, setShowDeleteHistoryModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [userToBlock, setUserToBlock] = useState(null);
+  const [blockDuration, setBlockDuration] = useState('7'); // ✅ Durée de blocage par défaut (7 jours)
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // ✅ Récupère les utilisateurs et l'historique
   useEffect(() => {
     Promise.all([
       api.get('/admin/users'),
@@ -35,6 +46,7 @@ export default function AdminUsers() {
       .finally(() => setLoading(false));
   }, []);
 
+  // ✅ Filtre les utilisateurs
   useEffect(() => {
     if (!search.trim()) { setFiltered(users); return; }
     const q = search.toLowerCase();
@@ -45,19 +57,21 @@ export default function AdminUsers() {
     ));
   }, [search, users]);
 
-  const toggleUser   = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const selectAll    = () => setSelected(new Set(filtered.map(u => u.id)));
-  const clearAll     = () => setSelected(new Set());
-  const isAllSel     = filtered.length > 0 && filtered.every(u => selected.has(u.id));
+  // ✅ Gestion de la sélection
+  const toggleUser = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSelected(new Set(filtered.map(u => u.id)));
+  const clearAll = () => setSelected(new Set());
+  const isAllSel = filtered.length > 0 && filtered.every(u => selected.has(u.id));
 
+  // ✅ Envoyer une annonce
   const handleSend = async () => {
     if (!announcement.title.trim() || !announcement.message.trim())
       return toast.error('Titre et message requis');
     setSending(true);
     try {
       const res = await api.post('/admin/announcements', {
-        title:    announcement.title,
-        message:  announcement.message,
+        title: announcement.title,
+        message: announcement.message,
         channel,
         user_ids: selected.size > 0 ? [...selected] : [],
       });
@@ -67,7 +81,7 @@ export default function AdminUsers() {
       setShowModal(false);
       setShowResults(true);
       toast.success(`Annonce préparée pour ${count} utilisateur(s) !`);
-      
+
       const h = await api.get('/admin/announcements');
       setHistory(h.data.announcements || []);
     } catch (err) {
@@ -75,10 +89,104 @@ export default function AdminUsers() {
     } finally { setSending(false); }
   };
 
+  // ✅ Ouvrir tous les liens WhatsApp
   const openAll = () => {
     waLinks.forEach((l, i) => setTimeout(() => window.open(l.url, `_wa_${i}`), i * 800));
   };
 
+  // ✅ Supprimer un utilisateur
+  const handleDeleteUser = async (userId) => {
+    setActionLoading(true);
+    try {
+      await api.delete(`/admin/users/${userId}`);
+      toast.success('Utilisateur supprimé avec succès !');
+      // ✅ Recharge les utilisateurs
+      const res = await api.get('/admin/users');
+      setUsers(res.data.users || []);
+      setFiltered(res.data.users || []);
+      setShowDeleteModal(false);
+      setUserToDelete(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la suppression');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ✅ Bloquer/Débloquer un utilisateur
+  const handleBlockUser = async (userId, durationDays) => {
+    setActionLoading(true);
+    try {
+      const action = userToBlock.is_blocked ? 'unblock' : 'block';
+      const res = await api.post(`/admin/users/${userId}/${action}`, {
+        duration: durationDays
+      });
+      toast.success(`Utilisateur ${action === 'block' ? 'bloqué' : 'débloqué'} avec succès !`);
+      // ✅ Recharge les utilisateurs
+      const usersRes = await api.get('/admin/users');
+      setUsers(usersRes.data.users || []);
+      setFiltered(usersRes.data.users || []);
+      setShowBlockModal(false);
+      setUserToBlock(null);
+    } catch (err) {
+      toast.error(err.response?.data?.error || `Erreur lors du ${userToBlock.is_blocked ? 'débloquage' : 'blocage'}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ✅ Supprimer une annonce de l'historique
+  const handleDeleteAnnouncement = async (announcementId) => {
+    setActionLoading(true);
+    try {
+      await api.delete(`/admin/announcements/${announcementId}`);
+      toast.success('Annonce supprimée de l\'historique avec succès !');
+      // ✅ Recharge l'historique
+      const res = await api.get('/admin/announcements');
+      setHistory(res.data.announcements || []);
+      setShowDeleteHistoryModal(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la suppression');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ✅ Supprimer tout l'historique
+  const handleDeleteAllHistory = async () => {
+    setActionLoading(true);
+    try {
+      await api.delete('/admin/announcements');
+      toast.success('Historique des annonces supprimé avec succès !');
+      setHistory([]);
+      setShowDeleteHistoryModal(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur lors de la suppression');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ✅ Ouvrir la modale de suppression d'un utilisateur
+  const openDeleteModal = (user) => {
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  // ✅ Ouvrir la modale de blocage/débloquage d'un utilisateur
+  const openBlockModal = (user) => {
+    setUserToBlock(user);
+    setBlockDuration('7'); // ✅ Réinitialise la durée
+    setShowBlockModal(true);
+  };
+
+  // ✅ Ouvrir la modale de suppression de l'historique
+  const openDeleteHistoryModal = (announcement = null) => {
+    setUserToDelete(announcement); // ✅ Réutilise userToDelete pour stocker l'annonce
+    setShowDeleteHistoryModal(true);
+  };
+
+  // ✅ Calcul du nombre total d'utilisateurs non-admin
   const globalTargetCount = users.filter(u => u.role !== 'admin').length;
   const formattedEmailsText = emailList.map(e => `${e.name} <${e.email}>`).join('\n');
   const emailsClipboardText = emailList.map(e => `${e.name} <${e.email}>`).join(', ');
@@ -92,7 +200,6 @@ export default function AdminUsers() {
   return (
     <div className="min-h-screen pt-20 pb-20 px-4" style={{ background: 'var(--bg-base)' }}>
       <div className="max-w-6xl mx-auto mt-4">
-        
         {/* Header */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -138,9 +245,13 @@ export default function AdminUsers() {
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
                   <th className="w-10 py-3 px-4 text-left"></th>
-                  {['Utilisateur', 'Email', 'Téléphone', 'Tickets', 'Connexion', 'Inscrit le'].map(h => (
-                    <th key={h} className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                  ))}
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Utilisateur</th>
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Email</th>
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Téléphone</th>
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Tickets</th>
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Statut</th>
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Inscrit le</th>
+                  <th className="text-left py-3 px-3 text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,7 +262,6 @@ export default function AdminUsers() {
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.03 }}
-                      onClick={() => toggleUser(u.id)}
                       className="cursor-pointer transition-colors hover:bg-[var(--bg-elevated)]"
                       style={{
                         borderBottom: '1px solid var(--border)',
@@ -159,8 +269,14 @@ export default function AdminUsers() {
                       }}>
                       <td className="py-3 px-4">
                         <div className={`w-4 h-4 rounded flex items-center justify-center transition-all ${isSelected ? 'bg-[var(--accent)]' : 'border'}`}
-                             style={{ borderColor: isSelected ? 'var(--accent)' : 'var(--border-strong)' }}>
-                          {isSelected && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                             style={{ borderColor: isSelected ? 'var(--accent)' : 'var(--border-strong)' }}
+                             onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleUser(u.id)}
+                            className="w-4 h-4 accent-[var(--accent)]"
+                          />
                         </div>
                       </td>
                       <td className="py-3 px-3">
@@ -180,16 +296,43 @@ export default function AdminUsers() {
                         </div>
                       </td>
                       <td className="py-3 px-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{u.email}</td>
-                      <td className="py-3 px-3 text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>{u.phone || '—'}</td>
+                      <td className="py-3 px-3 text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{u.phone || '—'}</td>
                       <td className="py-3 px-3">
                         <span className="font-bold text-xs" style={{ color: 'var(--accent)' }}>{u.tickets_count || 0}</span>
                       </td>
                       <td className="py-3 px-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${u.provider === 'google' ? 'bg-blue-500/15 text-blue-400' : 'bg-white/8 text-white/40'}`}>
-                          {u.provider === 'google' ? 'Google' : 'Email'}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                          u.is_blocked
+                            ? 'bg-red-500/15 text-red-400'
+                            : u.provider === 'google'
+                              ? 'bg-blue-500/15 text-blue-400'
+                              : 'bg-white/8 text-white/40'
+                        }`}>
+                          {u.is_blocked ? 'Bloqué' : u.provider === 'google' ? 'Google' : 'Email'}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(u.created_at).toLocaleDateString('fr-FR')}</td>
+                      {/* ✅ Nouveaux boutons d'action */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openBlockModal(u); }}
+                            className="p-1.5 rounded-lg transition-colors hover:bg-[var(--bg-elevated)]"
+                            title={u.is_blocked ? 'Débloquer' : 'Bloquer'}
+                            style={{ color: u.is_blocked ? 'var(--success)' : 'var(--warning)' }}
+                          >
+                            {u.is_blocked ? <CheckSquare size={14} /> : <Ban size={14} />}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openDeleteModal(u); }}
+                            className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10"
+                            title="Supprimer"
+                            style={{ color: 'var(--brand)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
                     </motion.tr>
                   );
                 })}
@@ -207,13 +350,25 @@ export default function AdminUsers() {
         {/* Historique annonces */}
         {history.length > 0 && (
           <div>
-            <h2 className="font-display text-2xl tracking-wide mb-4" style={{ color: 'var(--text-primary)' }}>HISTORIQUE DES ANNONCES</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-2xl tracking-wide" style={{ color: 'var(--text-primary)' }}>HISTORIQUE DES ANNONCES</h2>
+              <button
+                onClick={() => openDeleteHistoryModal()}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors hover:bg-red-500/10"
+                style={{ color: 'var(--brand)' }}
+                title="Supprimer tout l'historique"
+              >
+                <History size={14} /> Supprimer l'historique
+              </button>
+            </div>
             <div className="space-y-3">
               {history.map((a, i) => (
                 <div key={i} className="card p-4 flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${a.channel === 'whatsapp' ? 'bg-green-500/15 text-green-400' : 'bg-blue-500/15 text-blue-400'}`}>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        a.channel === 'whatsapp' ? 'bg-green-500/15 text-green-400' : 'bg-blue-500/15 text-blue-400'
+                      }`}>
                         {a.channel === 'whatsapp' ? '📱 WhatsApp' : '📧 Email'}
                       </span>
                       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{a.sent_count} destinataire(s)</span>
@@ -221,7 +376,17 @@ export default function AdminUsers() {
                     <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{a.title}</p>
                     <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-secondary)' }}>{a.message}</p>
                   </div>
-                  <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{new Date(a.created_at).toLocaleDateString('fr-FR')}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{new Date(a.created_at).toLocaleDateString('fr-FR')}</span>
+                    <button
+                      onClick={() => openDeleteHistoryModal(a)}
+                      className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10"
+                      title="Supprimer cette annonce"
+                      style={{ color: 'var(--brand)' }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -289,6 +454,300 @@ export default function AdminUsers() {
                 <button type="button" onClick={handleSend} disabled={sending} className="btn-primary flex-1 flex items-center justify-center gap-2">
                   {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                   {sending ? 'Traitement...' : 'Préparer l\'envoi'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODALE DE SUPPRESSION D'UN UTILISATEUR ──────────────────────── */}
+      <AnimatePresence>
+        {showDeleteModal && userToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="card w-full max-w-md p-6 space-y-4"
+              style={{ background: 'var(--bg-card)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg text-red-500">⚠️ Supprimer un utilisateur</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  style={{ color: 'var(--text-muted)' }}
+                  className="hover:text-[var(--text-primary)]"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
+                <p className="text-sm text-red-500">
+                  Vous êtes sur le point de supprimer définitivement l'utilisateur :
+                </p>
+                <div className="mt-3 flex items-center gap-3">
+                  {userToDelete.avatar_url ? (
+                    <img src={userToDelete.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                         style={{ background: 'rgba(229, 9, 20, 0.15)', color: 'var(--brand)' }}>
+                      {userToDelete.fullname?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{userToDelete.fullname}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{userToDelete.email}</p>
+                  </div>
+                </div>
+                <p className="text-xs mt-3 text-red-500">
+                  ⚠️ Cette action est <strong>irréversible</strong>. Tous ses tickets et données associées seront également supprimés.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteUser(userToDelete.id)}
+                  disabled={actionLoading}
+                  className="px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white disabled:opacity-70"
+                >
+                  {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Supprimer définitivement
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODALE DE BLOCAGE/DÉBLOCAGE D'UN UTILISATEUR ──────────────── */}
+      <AnimatePresence>
+        {showBlockModal && userToBlock && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setShowBlockModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="card w-full max-w-md p-6 space-y-4"
+              style={{ background: 'var(--bg-card)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg text-amber-500">
+                  {userToBlock.is_blocked ? '✅ Débloquer un utilisateur' : '⚠️ Bloquer un utilisateur'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowBlockModal(false)}
+                  style={{ color: 'var(--text-muted)' }}
+                  className="hover:text-[var(--text-primary)]"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className={`rounded-lg p-4 border ${
+                userToBlock.is_blocked
+                  ? 'bg-emerald-500/10 border-emerald-500/20'
+                  : 'bg-amber-500/10 border-amber-500/20'
+              }`}>
+                <p className="text-sm">
+                  {userToBlock.is_blocked
+                    ? 'Vous êtes sur le point de débloquer l\'utilisateur :'
+                    : 'Vous êtes sur le point de bloquer l\'utilisateur :'
+                  }
+                </p>
+                <div className="mt-3 flex items-center gap-3">
+                  {userToBlock.avatar_url ? (
+                    <img src={userToBlock.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                         style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--warning)' }}>
+                      {userToBlock.fullname?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{userToBlock.fullname}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{userToBlock.email}</p>
+                  </div>
+                </div>
+                {!userToBlock.is_blocked && (
+                  <div className="mt-3">
+                    <label className="text-xs font-bold mb-2 block" style={{ color: 'var(--text-muted)' }}>
+                      Durée du blocage (en jours)
+                    </label>
+                    <select
+                      value={blockDuration}
+                      onChange={(e) => setBlockDuration(e.target.value)}
+                      className="input-field"
+                      style={{ width: '100%' }}
+                    >
+                      <option value="1">1 jour</option>
+                      <option value="7">7 jours</option>
+                      <option value="30">30 jours</option>
+                      <option value="90">90 jours</option>
+                      <option value="365">1 an</option>
+                      <option value="permanent">Permanent</option>
+                    </select>
+                  </div>
+                )}
+                <p className="text-xs mt-3">
+                  {userToBlock.is_blocked
+                    ? 'L\'utilisateur pourra à nouveau se connecter.'
+                    : 'L\'utilisateur ne pourra plus se connecter pendant la durée spécifiée.'
+                  }
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBlockModal(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBlockUser(userToBlock.id, blockDuration)}
+                  disabled={actionLoading}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 ${
+                    userToBlock.is_blocked
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      : 'bg-amber-500 hover:bg-amber-600 text-white'
+                  } disabled:opacity-70`}
+                >
+                  {actionLoading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : userToBlock.is_blocked ? (
+                    <CheckSquare size={14} />
+                  ) : (
+                    <Ban size={14} />
+                  )}
+                  {userToBlock.is_blocked ? 'Débloquer' : 'Bloquer'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODALE DE SUPPRESSION DE L'HISTORIQUE ──────────────────────── */}
+      <AnimatePresence>
+        {showDeleteHistoryModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setShowDeleteHistoryModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="card w-full max-w-md p-6 space-y-4"
+              style={{ background: 'var(--bg-card)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg text-red-500">
+                  {userToDelete ? '⚠️ Supprimer une annonce' : '⚠️ Supprimer tout l\'historique'}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteHistoryModal(false)}
+                  style={{ color: 'var(--text-muted)' }}
+                  className="hover:text-[var(--text-primary)]"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="bg-red-500/10 rounded-lg p-4 border border-red-500/20">
+                {userToDelete ? (
+                  <>
+                    <p className="text-sm text-red-500">
+                      Vous êtes sur le point de supprimer définitivement cette annonce :
+                    </p>
+                    <div className="mt-3">
+                      <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{userToDelete.title}</p>
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{userToDelete.message}</p>
+                      <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                        Envoyée le {new Date(userToDelete.created_at).toLocaleDateString('fr-FR')}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-red-500">
+                    Vous êtes sur le point de supprimer <strong>tout l'historique des annonces</strong>.
+                    <br />
+                    Cette action est <strong>irréversible</strong>.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteHistoryModal(false)}
+                  className="px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                  style={{
+                    color: 'var(--text-secondary)',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border)'
+                  }}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => userToDelete ? handleDeleteAnnouncement(userToDelete.id) : handleDeleteAllHistory()}
+                  disabled={actionLoading}
+                  className="px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white disabled:opacity-70"
+                >
+                  {actionLoading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  {userToDelete ? 'Supprimer cette annonce' : 'Supprimer tout l\'historique'}
                 </button>
               </div>
             </motion.div>
