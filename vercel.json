@@ -1,26 +1,12 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist",
-        "installCommand": "npm install",
-        "buildCommand": "npm run build"
-      }
-    }
-  ],
-  "routes": [
+      "source": "/api/:path*",
+      "destination": "https://ticketflow-backend-9xkf.onrender.com/api/:path*"
+    },
     {
-      "src": "/(.*)",
-      "dest": "/"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
-  ],
-  
-  "nodeVersion": "18.x",
-  
-  "experimental": {
-    "rolldown": false
-  }
+  ]
 }
