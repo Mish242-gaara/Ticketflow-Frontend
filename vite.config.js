@@ -1,19 +1,26 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// https://vitejs.dev/config/
 export default defineConfig({
-  // Base path pour les assets (important pour Vercel)
+  plugins: [
+    react({
+      // ✅ Assure la compatibilité avec React 18
+      jsxRuntime: 'automatic',
+      jsxImportSource: 'react',
+    }),
+  ],
+  // ✅ Base path pour Vercel
   base: '/',
-
-  plugins: [react()],
-
-  // Configuration du serveur de développement
+  // ✅ Configuration du serveur de développement
   server: {
     port: 5173,
+    // ✅ Désactive le proxy pour les routes OAuth
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,
+        bypass: (req) => req.url.startsWith('/api/auth/google'),
       },
       '/uploads': {
         target: 'http://localhost:5000',
@@ -21,33 +28,25 @@ export default defineConfig({
       },
     },
   },
-
-  // Optimisation des dépendances
+  // ✅ Optimisation des dépendances
   optimizeDeps: {
-    exclude: ['html5-qrcode'], // ✅ Exclut html5-qrcode (problématique avec Vite)
+    include: ['react', 'react-dom', 'react-router-dom'],
+    exclude: ['html5-qrcode'],
   },
-
-  // Configuration du build
+  // ✅ Configuration du build
   build: {
-    emptyOutDir: true, // ✅ Nettoie le dossier de build avant chaque génération
-    chunkSizeWarningLimit: 1000, // ✅ Augmente la limite de taille des chunks (en Ko)
+    emptyOutDir: true,
+    // ✅ Désactive les chunks manuels (problématique avec Vercel)
     rollupOptions: {
-      // ✅ Désactive manualChunks personnalisé (cause de l'erreur)
       output: {
-        // manualChunks: undefined, // ✅ Désactivé pour éviter l'erreur
+        manualChunks: undefined,
       },
     },
+    // ✅ Augmente la limite de taille des chunks
+    chunkSizeWarningLimit: 1000,
   },
-
-  // Définition des variables globales pour le navigateur
+  // ✅ Définition des variables globales
   define: {
     global: 'window',
-  },
-
-  // Alias pour les imports
-  resolve: {
-    alias: {
-      '@': '/src',
-    },
   },
 });
