@@ -1,10 +1,8 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-
-import About from './pages/About';
 
 // --- Composants ---
 import Navbar from './components/Navbar';
@@ -75,7 +73,6 @@ const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 
 // --- 3. Composant principal App ---
 export default function App() {
-  // ✅ Suppression de l'état appKey et de l'effet beforeunload (inutile et problématique)
   return (
     <ThemeProvider>
       <BrowserRouter>
@@ -93,7 +90,6 @@ export default function App() {
           <Routes>
             {/* Routes publiques */}
             <Route path="/" element={<Home />} />
-            <Route path="/about" element={<About />} />
             <Route path="/events" element={<Events />} />
             <Route path="/events/:slug" element={<EventDetail />} />
             <Route path="/ticket/:uuid" element={<TicketPage />} />
