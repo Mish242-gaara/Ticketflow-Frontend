@@ -1,39 +1,73 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa'; // ✅ Plugin pour PWA (optionnel)
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react({
-      // ✅ Assure la compatibilité avec React 18
       jsxRuntime: 'automatic',
       jsxImportSource: 'react',
-      // ✅ Désactive le fast refresh en production (peut causer des problèmes)
-      fastRefresh: process.env.NODE_ENV !== 'production',
+    }),
+    // ✅ Plugin PWA (optionnel, mais recommandé pour une meilleure gestion)
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.png', 'manifest.json'],
+      manifest: {
+        name: 'TicketFlow',
+        short_name: 'TicketFlow',
+        description: 'Plateforme de gestion de tickets',
+        theme_color: '#ffffff',
+        icons: [
+          {
+            src: '/favicon.png',
+            sizes: '192x192',
+            type: 'image/png',
+          },
+        ],
+      },
+      workbox: {
+        // ✅ Désactive le précaching des chunks JS
+        globPatterns: ['**/*.{css,png,jpg,jpeg,svg}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/ticketflow-backend-9xkf\.onrender\.com\/api\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60, // 1 heure
+              },
+            },
+          },
+        ],
+      },
     }),
   ],
-  // ✅ Base path pour Vercel
   base: '/',
-  // ✅ Désactive les chunks manuels (problématique avec Vercel)
   build: {
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks: undefined, // ✅ Désactive manualChunks
-        // ✅ Optimise les noms des chunks
+        manualChunks: undefined,
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
         assetFileNames: 'assets/[name].[hash].[ext]',
       },
     },
-    // ✅ Augmente la limite de taille des chunks
-    chunkSizeWarningLimit: 1000,
-    // ✅ Désactive le minify en développement pour déboguer
-    minify: process.env.NODE_ENV === 'production',
-    // ✅ Exclut les fichiers problématiques
-    sourcemap: true,
+    // ✅ Copie sw.js dans dist/
+    copyPublicDir: true,
   },
-  // ✅ Optimisation des dépendances
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        bypass: (req) => req.url.startsWith('/api/auth/google'),
+      },
+    },
+  },
   optimizeDeps: {
     include: [
       'react',
@@ -46,26 +80,8 @@ export default defineConfig({
     ],
     exclude: ['html5-qrcode'],
   },
-  // ✅ Configuration du serveur de développement
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-        bypass: (req) => req.url.startsWith('/api/auth/google'),
-      },
-      '/uploads': {
-        target: 'http://localhost:5000',
-        changeOrigin: true,
-      },
-    },
-  },
-  // ✅ Définition des variables globales
   define: {
     global: 'window',
-    'process.env': {}, // ✅ Évite les erreurs "process is not defined"
+    'process.env': {},
   },
-  // ✅ Désactive le cache pour éviter les problèmes
-  cacheDir: 'node_modules/.vite-cache',
 });
