@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { login as loginApi } from '../services/api';
 import useAuthStore from '../store/authStore';
 
-// ✅ URL du backend (pour Vite)
+// ✅ URL du backend (dynamique pour Vercel et local)
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export default function Login() {
@@ -20,12 +20,20 @@ export default function Login() {
   const params = new URLSearchParams(window.location.search);
   const redirect = params.get('redirect') || '/';
 
-  // Redirige automatiquement si déjà connecté
+  // ✅ Redirige automatiquement si déjà connecté
   useEffect(() => {
     if (authUser) {
       navigate(redirect);
     }
   }, [authUser, navigate, redirect]);
+
+  // ✅ Vérifie que BACKEND_URL est bien défini
+  useEffect(() => {
+    console.log('🔹 BACKEND_URL:', BACKEND_URL); // ✅ Log pour déboguer
+    if (!BACKEND_URL.includes('localhost') && !BACKEND_URL.includes('vercel.app') && !BACKEND_URL.includes('render.com')) {
+      console.warn('⚠️ BACKEND_URL semble incorrect. Vérifiez VITE_BACKEND_URL dans Vercel.');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -48,15 +56,21 @@ export default function Login() {
 
   const handleGoogleLogin = () => {
     try {
-      // Stocke le redirect dans sessionStorage
+      // ✅ Stocke le redirect dans sessionStorage
       sessionStorage.setItem('auth_redirect', redirect);
 
-      // ✅ Utilise BACKEND_URL au lieu de process.env
-      window.location.href = `${BACKEND_URL}/api/auth/google`;
-      console.log('🔹 Redirection vers Google OAuth:', `${BACKEND_URL}/api/auth/google`);
+      // ✅ Vérifie que BACKEND_URL est valide
+      if (!BACKEND_URL) {
+        throw new Error('BACKEND_URL non défini. Vérifiez VITE_BACKEND_URL dans Vercel.');
+      }
+
+      // ✅ Redirige vers le backend (production ou local)
+      const googleAuthUrl = `${BACKEND_URL}/api/auth/google`;
+      console.log('🔹 Redirection vers Google OAuth:', googleAuthUrl);
+      window.location.href = googleAuthUrl;
     } catch (err) {
       console.error('❌ Erreur handleGoogleLogin:', err);
-      toast.error('Erreur lors de la connexion Google');
+      toast.error(err.message || 'Erreur lors de la connexion Google');
     }
   };
 
@@ -79,7 +93,7 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Bouton Google OAuth */}
+        {/* ✅ Bouton Google OAuth avec vérification */}
         <button
           onClick={handleGoogleLogin}
           className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl font-bold text-sm mb-4 transition-all hover:bg-neutral-500/10"
@@ -176,7 +190,7 @@ export default function Login() {
   );
 }
 
-// Composant pour l'icône Google
+// ✅ Composant pour l'icône Google
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24">
