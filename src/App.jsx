@@ -1,8 +1,11 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from 'framer-motion'; // Import pour les composants motion
+
+import About from './pages/about'; // Importez vos pages !
+
 
 // --- Composants ---
 import Navbar from './components/Navbar';
@@ -73,71 +76,84 @@ const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 
 // --- 3. Composant principal App ---
 export default function App() {
+  const [appKey, setAppKey] = useState(0);
+
+  // Forcer un rechargement complet après un rafraîchissement
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      setAppKey(prev => prev + 1);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <UpdateBanner />
-        <Navbar />
-        {/* ✅ Désactive InstallPWA en production pour éviter les conflits */}
-        {process.env.NODE_ENV === 'development' && <InstallPWA />}
+    // ✅ Clé unique pour forcer le rechargement complet de l'application
+    <div key={appKey}>
+      <ThemeProvider>
+        <BrowserRouter>
+          <UpdateBanner />
+          <Navbar />
+          <InstallPWA />
 
-        {/* Suspense pour le chargement asynchrone */}
-        <Suspense fallback={
-          <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
-            <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
-          </div>
-        }>
-          <Routes>
-            {/* Routes publiques */}
-            <Route path="/" element={<Home />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/events/:slug" element={<EventDetail />} />
-            <Route path="/ticket/:uuid" element={<TicketPage />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* Suspense pour le chargement asynchrone */}
+          <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--accent)' }} />
+            </div>
+          }>
+            <Routes>
+              {/* Routes publiques */}
+              <Route path="/" element={<Home />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/events/:slug" element={<EventDetail />} />
+              <Route path="/ticket/:uuid" element={<TicketPage />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
-            {/* Routes protégées (nécessitent une connexion) */}
-            <Route
-              path="/my-tickets"
-              element={<ProtectedRoute><MyTickets /></ProtectedRoute>}
-            />
+              {/* Routes protégées (nécessitent une connexion) */}
+              <Route
+                path="/my-tickets"
+                element={<ProtectedRoute><MyTickets /></ProtectedRoute>}
+              />
 
-            {/* Routes Admin (nécessitent un rôle admin) */}
-            <Route
-              path="/scanner"
-              element={<AdminRoute><Scanner /></AdminRoute>}
-            />
-            <Route
-              path="/admin"
-              element={<AdminRoute><Admin /></AdminRoute>}
-            />
-            <Route
-              path="/admin/users"
-              element={<AdminRoute><AdminUsers /></AdminRoute>}
-            />
-            <Route
-              path="/admin/create-event"
-              element={<AdminRoute><CreateEvent /></AdminRoute>}
-            />
-            <Route
-              path="/admin/edit-event/:id"
-              element={<AdminRoute><EditEvent /></AdminRoute>}
-            />
+              {/* Routes Admin (nécessitent un rôle admin) */}
+              <Route
+                path="/scanner"
+                element={<AdminRoute><Scanner /></AdminRoute>}
+              />
+              <Route
+                path="/admin"
+                element={<AdminRoute><Admin /></AdminRoute>}
+              />
+              <Route
+                path="/admin/users"
+                element={<AdminRoute><AdminUsers /></AdminRoute>}
+              />
+              <Route
+                path="/admin/create-event"
+                element={<AdminRoute><CreateEvent /></AdminRoute>}
+              />
+              <Route
+                path="/admin/edit-event/:id"
+                element={<AdminRoute><EditEvent /></AdminRoute>}
+              />
 
-            {/* Route 404 (Page non trouvée) */}
-            <Route
-              path="*"
-              element={
-                <div className="min-h-screen flex flex-col items-center justify-center" style={{ color: 'var(--text-muted)' }}>
-                  <p className="font-display text-8xl tracking-widest mb-4" style={{ color: 'var(--brand)' }}>404</p>
-                  <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>Page introuvable</p>
-                </div>
-              }
-            />
-          </Routes>
-        </Suspense>
-      </BrowserRouter>
-    </ThemeProvider>
+              {/* Route 404 (Page non trouvée) */}
+              <Route
+                path="*"
+                element={
+                  <div className="min-h-screen flex flex-col items-center justify-center" style={{ color: 'var(--text-muted)' }}>
+                    <p className="font-display text-8xl tracking-widest mb-4" style={{ color: 'var(--brand)' }}>404</p>
+                    <p className="text-lg" style={{ color: 'var(--text-secondary)' }}>Page introuvable</p>
+                  </div>
+                }
+              />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </ThemeProvider>
+    </div>
   );
 }
