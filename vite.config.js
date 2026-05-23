@@ -1,19 +1,59 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+// https://vitejs.dev/config/
 export default defineConfig({
-  // Base path pour les assets (important pour Vercel)
+  plugins: [
+    react({
+      // ✅ Assure la compatibilité avec React 18
+      jsxRuntime: 'automatic',
+      jsxImportSource: 'react',
+      // ✅ Désactive le fast refresh en production (peut causer des problèmes)
+      fastRefresh: process.env.NODE_ENV !== 'production',
+    }),
+  ],
+  // ✅ Base path pour Vercel
   base: '/',
-
-  plugins: [react()],
-
-  // Configuration du serveur de développement
+  // ✅ Désactive les chunks manuels (problématique avec Vercel)
+  build: {
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined, // ✅ Désactive manualChunks
+        // ✅ Optimise les noms des chunks
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]',
+      },
+    },
+    // ✅ Augmente la limite de taille des chunks
+    chunkSizeWarningLimit: 1000,
+    // ✅ Désactive le minify en développement pour déboguer
+    minify: process.env.NODE_ENV === 'production',
+    // ✅ Exclut les fichiers problématiques
+    sourcemap: true,
+  },
+  // ✅ Optimisation des dépendances
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      'framer-motion',
+      'lucide-react',
+      'react-hot-toast',
+      'zustand',
+    ],
+    exclude: ['html5-qrcode'],
+  },
+  // ✅ Configuration du serveur de développement
   server: {
     port: 5173,
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true,
+        bypass: (req) => req.url.startsWith('/api/auth/google'),
       },
       '/uploads': {
         target: 'http://localhost:5000',
@@ -21,33 +61,11 @@ export default defineConfig({
       },
     },
   },
-
-  // Optimisation des dépendances
-  optimizeDeps: {
-    exclude: ['html5-qrcode'], // ✅ Exclut html5-qrcode (problématique avec Vite)
-  },
-
-  // Configuration du build
-  build: {
-    emptyOutDir: true, // ✅ Nettoie le dossier de build avant chaque génération
-    chunkSizeWarningLimit: 1000, // ✅ Augmente la limite de taille des chunks (en Ko)
-    rollupOptions: {
-      // ✅ Désactive manualChunks personnalisé (cause de l'erreur)
-      output: {
-        // manualChunks: undefined, // ✅ Désactivé pour éviter l'erreur
-      },
-    },
-  },
-
-  // Définition des variables globales pour le navigateur
+  // ✅ Définition des variables globales
   define: {
     global: 'window',
+    'process.env': {}, // ✅ Évite les erreurs "process is not defined"
   },
-
-  // Alias pour les imports
-  resolve: {
-    alias: {
-      '@': '/src',
-    },
-  },
+  // ✅ Désactive le cache pour éviter les problèmes
+  cacheDir: 'node_modules/.vite-cache',
 });
