@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://ticketflow-backend-9xkf.onrender.com/api', 
+  withCredentials: true,
   timeout: 20000,
 });
 
