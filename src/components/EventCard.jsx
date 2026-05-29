@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, MapPin, Users, Ticket, Maximize2, X } from 'lucide-react';
 
 // URL de base pour les images (à adapter selon ton environnement)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export default function EventCard({ event, index = 0 }) {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);

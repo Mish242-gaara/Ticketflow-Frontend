@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { getEvent, reserveTicket } from '../services/api';
 
 // URL de base pour les images (identique à EventCard)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 // ⚠️ MODIFIE CES NUMÉROS AVEC TES VRAIS NUMÉROS DE RÉCEPTION MOMO / AIRTEL / WHATSAPP
 const MOMO_NUMBER_MTN = "+242 06 414 91 49";

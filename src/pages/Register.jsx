@@ -29,7 +29,7 @@ export default function Register() {
   const handleGoogleLogin = () => {
     sessionStorage.setItem('auth_redirect', redirect);
     // Utilisation dynamique de l'URL de l'API de configuration ou fallback local
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const apiUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
     window.location.href = `${apiUrl}/api/auth/google`;
   };
 
