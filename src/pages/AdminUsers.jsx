@@ -35,15 +35,33 @@ export default function AdminUsers() {
 
   // ✅ Récupère les utilisateurs et l'historique
   useEffect(() => {
-    Promise.all([
-      api.get('/admin/users'),
-      api.get('/admin/announcements'),
-    ]).then(([u, a]) => {
-      setUsers(u.data.users || []);
-      setFiltered(u.data.users || []);
-      setHistory(a.data.announcements || []);
-    }).catch(() => toast.error('Erreur chargement'))
-      .finally(() => setLoading(false));
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [usersRes, announcementsRes] = await Promise.all([
+          api.get('/admin/users'),
+          api.get('/admin/announcements'),
+        ]);
+
+        // CORRECTION : Accéder à la bonne clé de réponse du backend
+        const userData = usersRes.data.users || [];
+        const historyData = announcementsRes.data.announcements || [];
+
+        console.log("Utilisateurs reçus:", userData);
+        console.log("Annonces reçues:", historyData);
+
+        setUsers(userData);
+        setFiltered(userData);
+        setHistory(historyData);
+      } catch (err) {
+        console.error("Erreur de récupération:", err);
+        toast.error('Erreur lors du chargement des données');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   // ✅ Filtre les utilisateurs
